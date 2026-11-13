@@ -1,0 +1,25 @@
+--- a/ios/UITests/MultiplayerKeyboardTests.m
++++ b/ios/UITests/MultiplayerKeyboardTests.m
+@@ -54,15 +54,13 @@
+ }
+ - (void)paste:(NSString *)value openMenu:(BOOL)openMenu {
+     XCTAssertEqualObjects(value, self.clipboardFixture);
+-    // Seed immediately before Paste, not before a potentially long world load.
+-    XCUIApplication *runner = [[XCUIApplication alloc] initWithBundleIdentifier:NSBundle.mainBundle.bundleIdentifier];
+-    [runner activate];
+-    UIPasteboard.generalPasteboard.string = value;
+-    XCTAssertEqualObjects(UIPasteboard.generalPasteboard.string, value);
+-    [self.app activate];
+-    [self.text pressForDuration:1.2];
+-    if (!openMenu && self.app.menuItems[@"Select All"].exists) { [self.app.menuItems[@"Select All"] tap]; }
+-    [[self editMenu:@"Paste"] tap];
++    if (openMenu) {
++        [self.text pressForDuration:1.2];
++        [[self editMenu:@"Paste"] tap];
++    } else {
++        // Use UIKit's native keyboard paste action on the existing selection.
++        [self.text typeKey:@"v" modifierFlags:XCUIKeyModifierCommand];
++    }
+     XCUIApplication *springboard = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];
+     if (springboard.alerts.firstMatch.exists) {
+         XCUIElement *allow = [springboard.alerts.buttons matchingPredicate:[NSPredicate predicateWithFormat:@"label == 'Allow Paste' OR label == 'Einsetzen erlauben' OR label == 'Einfügen erlauben' OR label == 'Erlauben'"]].firstMatch;

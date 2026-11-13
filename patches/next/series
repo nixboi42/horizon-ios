@@ -1,0 +1,8 @@
+01-ios-workspace.patch
+01-ios-platform-adapters.patch
+01-ios-metal-backend.patch
+02-retain-metal-capability-fallbacks-and-safe-area-layout.patch
+03-integrate-ios-lifecycle-input-and-native-keyboard.patch
+04-add-network-diagnostics.patch
+05-record-port-release-and-contribution-guidance.patch
+06-omit-build-machine-path-from-ios-crash-reports.patch

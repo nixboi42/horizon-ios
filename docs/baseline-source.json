@@ -1,0 +1,372 @@
+{
+  "base": "18840db9146b2521dd46ad52a4559a49be180f8f",
+  "excluded_generated": [
+    "ios/com.apple.DeveloperTools/27.2-27B52/Xcode/27.2-27B52/Xcode/CachedSpecifications-xcodebuild"
+  ],
+  "files": {
+    ".github/workflows/ios.yml": {
+      "sha256": "c68a7ab937f9ea15de2809ee6033e1e4a2c53bee9c89617a6f116fa608398c9b",
+      "executable": false
+    },
+    ".gitignore": {
+      "sha256": "f4f71b9b6c20cd2b68c865b69096b5715e314ea0c104ed0f6774899da9847843",
+      "executable": false
+    },
+    "BUILDING.md": {
+      "sha256": "c7c35604b6b389a44c38d126ff4e07fdd658d46775eaee2634f3916e46aa6d66",
+      "executable": false
+    },
+    "CHANGELOG.md": {
+      "sha256": "d9c931c1c8f117a7b553b6deb9733f60e64bfd3749f47ca70fb34e47a4719c07",
+      "executable": false
+    },
+    "CONTRIBUTING.md": {
+      "sha256": "11dfb59c8379cd1532f81dd5f53d3961f40cd239edb77b88d332b1ae6fddabe6",
+      "executable": false
+    },
+    "Cargo.lock": {
+      "sha256": "8312a87d43bcd3214170713e87fcfcc28d4ce7bd2c81cdad91644df6d52d0553",
+      "executable": false
+    },
+    "Cargo.toml": {
+      "sha256": "029d289bccb751da9c77a1bba0300ea22ec2e81e10350c7b984860479f3fd223",
+      "executable": false
+    },
+    "INSTALL.md": {
+      "sha256": "0503bb7607a496b60bfc171ebd00067d55a71d1ac67f2a53c8f58f52b48ab2ab",
+      "executable": false
+    },
+    "KNOWN_ISSUES.md": {
+      "sha256": "a941be8d1d2c19bae4257d14a6e97bb16205bf0a57d15377bae5191167463ba7",
+      "executable": false
+    },
+    "NOTICE": {
+      "sha256": "251d28196cd80ba5472bac60a5c405c700297efa974a3da951e36ab42ea1ef11",
+      "executable": false
+    },
+    "README.md": {
+      "sha256": "9f8a2540d410cd9826f863871d768405f12ca2e0d85ab11e70be75b23a7cb5e7",
+      "executable": false
+    },
+    "RELEASE_NOTES.md": {
+      "sha256": "1f324d8cb054b5fd6f2875d4b583905a9d55402cbf141f0825a32a147b27839a",
+      "executable": false
+    },
+    "crates/horizon-client-input/Cargo.toml": {
+      "sha256": "7c6acc39cb7a5b270449d0009964c0892a600f17a0125c8a94c231f4e5a858d2",
+      "executable": false
+    },
+    "crates/horizon-client-input/src/clipboard.rs": {
+      "sha256": "6b5f6633df45b74bec78e83a40f21aa4e08fbfa5b058fb47f39a36a7c9dbd249",
+      "executable": false
+    },
+    "crates/horizon-client-input/src/keybinds.rs": {
+      "sha256": "8e76585575244627876653e56978803d4ea2ee937990a49d399506a081594a5f",
+      "executable": false
+    },
+    "crates/horizon-client-lib/Cargo.toml": {
+      "sha256": "c373d7917cf562991c166f6042ed28da5fc3d073a52343b3d0137f73abb77800",
+      "executable": false
+    },
+    "crates/horizon-client-render/Cargo.toml": {
+      "sha256": "3bb9de8d494514ec6fc74953a8b3a54e2eabb24cc4efb955da2df6d50eb6d410",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/controller_ui.rs": {
+      "sha256": "802459a6654e082f382a80a985d7fb66f6359868d91a8649e2c8ff9a285dae22",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/gfx.rs": {
+      "sha256": "3ba07763281ade93f7045d12e6631fcee78d76c95936b76f2cd95983a737c509",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/gfx/flat.rs": {
+      "sha256": "240b75df5a054b942d1d4c83cd2087b7819aaa1a2f4d71b8863b36823294a0cf",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/gfx/world_post.rs": {
+      "sha256": "f1f7fe0f3ecfda7225a4e10b3b58ac71554ceaa6c805d13a856a41df9e645433",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/graphics_ui.rs": {
+      "sha256": "f9053cdc398a46b2451a9b35f73f6af6cc80aaf941c09d21526ec07a50f5355b",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/hud_layout.rs": {
+      "sha256": "0bdc474e35448fcbe1fff36454994f6e8c81d5cececb7577e380035839514a1d",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/multiline_edit.rs": {
+      "sha256": "31f813a6405a425d1b990827a6e8e0d24fe7929f55ac7e2bd3f776a05afd2719",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/options_ui.rs": {
+      "sha256": "f8c4369872ae2a7fc0bcecbd94aee68db5d487c16a3741414406d9caac65f2e0",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/pack_screen.rs": {
+      "sha256": "0031f9e6a7e740c84665c391e152d782bb4df94c090f04511ea52fc0ba5647ee",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/shader_ui.rs": {
+      "sha256": "a93773047dc36ac318659b382c37a8f8504d754c217800aebad797bbcab41431",
+      "executable": false
+    },
+    "crates/horizon-client-render/src/split_profiles.rs": {
+      "sha256": "af60d3e7d93c18c1cf5cdfe4c8e0f16b7908ea716c5f48e4f88f1b90a4fe1675",
+      "executable": false
+    },
+    "crates/horizon-client/Cargo.toml": {
+      "sha256": "6c26ed70b936434c423775dd798f2f157ab4d845b50376f126bd027ecf266ba6",
+      "executable": false
+    },
+    "crates/horizon-client/src/game.rs": {
+      "sha256": "bae3960f5b3086b066b1da45b52c6d9863d4864fc1c7821b214f6d3026053585",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/block_editor.rs": {
+      "sha256": "b0c31637275195c77111fe9bdbc4f4171292102c26fdbe911ccb4e2e79cf1ae5",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/books.rs": {
+      "sha256": "02499c0243dbb7135505cc66fa7e1f750c806e35782a6e288a61c509ef20aa41",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/dialogs.rs": {
+      "sha256": "4f4c5ee1f3bbf26527880e2774340300e2a5d5bb79f3b02b451cc8427cee1d1c",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/ime.rs": {
+      "sha256": "de1b74f782d7b60952dc8c4e630a0a16a381184101ab38c7c858259ce3a0da32",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/integrated.rs": {
+      "sha256": "3eb1b6f54da954e8b957e18ee7c9174336eadc85d56d15a59a9d7d7729081049",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/lan_screen.rs": {
+      "sha256": "a7add133b95646dd4f424509f7f497d71b5644c441ab29f59de092c168e0b89e",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/mobile.rs": {
+      "sha256": "912399de6bda528572a219db0be5889539a8078fecf8f08fc747a5c665ec3bc5",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/mobile_tests.rs": {
+      "sha256": "7ec9c993d17b88a8e50e75b5ac260daed55f4a4e3c189ce26ca2b0b19afca5aa",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/native_text_field.rs": {
+      "sha256": "af6d4d778f93c98d4bd4917df00657d96f3538aaf03395a2451280186888fe5b",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/pad_menu.rs": {
+      "sha256": "d5cf042fde3099bb1471bc9bc385597799c22f613b46ce6e28e7667d722cdc0f",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/remote.rs": {
+      "sha256": "6002d2b2491de2df1a4e39723baff64916148ccf9bc606a4074cede6c67adfa4",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/sign_edit.rs": {
+      "sha256": "229aa9b93df7ff4caa64172262e3b6604488822d20f01ba2841d34b72aef0ecc",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/spectator.rs": {
+      "sha256": "7e7a7eb07a19d50f0a2820137300fe5f6725b0afe801ea333cbf0d4dac29da67",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/split/players.rs": {
+      "sha256": "69b7c0423feb6ad6dd4fae3a739781594507aefd3ad8247dddd025e15e4c1b9e",
+      "executable": false
+    },
+    "crates/horizon-client/src/game/titles.rs": {
+      "sha256": "29aa46f49a18ff9d5d2aecfac2c0834cbb1cd2905885e1c3d77ee2e1948543ba",
+      "executable": false
+    },
+    "crates/horizon-client/src/net.rs": {
+      "sha256": "872551e6d37468b2bed63776c061803fcf5e774878ff23e79f953143fd226a6a",
+      "executable": false
+    },
+    "crates/horizon-client/src/title.rs": {
+      "sha256": "1b87a75170444dac53e5ab3c0c3be24387cb2eaffc004f78fceb56bc68c55599",
+      "executable": false
+    },
+    "crates/horizon-hdr/Cargo.toml": {
+      "sha256": "8b68af869a0bb250cb9fab67bb54cc3419b344218e3ed010c1e2f06e177283fc",
+      "executable": false
+    },
+    "crates/horizon-hdr/src/lib.rs": {
+      "sha256": "4ca50d7192785f9a441ee8987325963ede33e8cca7d5b2321ee118a6222ef0f7",
+      "executable": false
+    },
+    "crates/horizon-ios/Cargo.toml": {
+      "sha256": "100b7864fdf501176dee08595741603c183dc2c59b389de9e0e00f6873123b63",
+      "executable": false
+    },
+    "crates/horizon-ios/src/diagnostic.wgsl": {
+      "sha256": "0545d5a747d67581196b48af7fbae350a48cef347da3728e41c4ffb90218741c",
+      "executable": false
+    },
+    "crates/horizon-ios/src/flight.rs": {
+      "sha256": "cb927cdc05c1b77315214092aaaead7f7df7c2d7bfe360eacc25694c165aa3e9",
+      "executable": false
+    },
+    "crates/horizon-ios/src/gameplay_input.rs": {
+      "sha256": "f4cc5480d57597969b30094f675c9e102b63a182c0a34e1ecfb82433cf38dbe3",
+      "executable": false
+    },
+    "crates/horizon-ios/src/lib.rs": {
+      "sha256": "3ddc8b9a252716f4f3cb66ca20ab80fa566ef223491036347e6a37433e6c6a51",
+      "executable": false
+    },
+    "crates/horizon-ios/src/native_input.rs": {
+      "sha256": "efe3e8d1a32ce76dc2e515b70b4bb1221d4716dde39c75f8a2febfaf2d54797b",
+      "executable": false
+    },
+    "crates/horizon-ios/src/resources.rs": {
+      "sha256": "16dea82640b6a1b3a9525d5d58e931611247fc2e276dee9dd686a9a59d9cadc6",
+      "executable": false
+    },
+    "crates/horizon-ios/src/scene.rs": {
+      "sha256": "d6549a3a3922c68b1c16700ee6e7193246f47bbc3aa235119792743ca2b8d398",
+      "executable": false
+    },
+    "crates/horizon-ios/src/terrain.rs": {
+      "sha256": "f9483b3db8d66c4f11624603313465ee8b6d4da5601741c3793fddde89d8b7af",
+      "executable": false
+    },
+    "crates/horizon-protocol/examples/probe.rs": {
+      "sha256": "07c3a3c469815e0c124e06056c8d65e3d17fd0b819faf20700545f08d4661575",
+      "executable": false
+    },
+    "crates/horizon-protocol/src/connection.rs": {
+      "sha256": "0a87317e6466c8250640f75a6908d2c39bb73519026cc16c5482b41482329994",
+      "executable": false
+    },
+    "crates/horizon-protocol/src/diagnostics.rs": {
+      "sha256": "4cb1a8ecb5a72290abb7e7fbc07076448b55b54c3505a082ab453ea531adecc8",
+      "executable": false
+    },
+    "crates/horizon-protocol/src/lib.rs": {
+      "sha256": "44dcce1a1832f8613e2c5188f574d64688fe5b66ae8e54ae064eb52caca01326",
+      "executable": false
+    },
+    "crates/horizon-protocol/src/packets/mod.rs": {
+      "sha256": "52894fa20a2c4511f9cb466330660f1df45d4bbd75d9f7b1e5ed231368a06506",
+      "executable": false
+    },
+    "crates/horizon-threads/Cargo.toml": {
+      "sha256": "2a3f77e443eccd48a3a823c1595bd9777814cb3308326ba122d5440b30719e8a",
+      "executable": false
+    },
+    "crates/horizon-threads/src/ios_clipboard.rs": {
+      "sha256": "748f253dc5e3750d5c1cec372ecde7f82f09510e3578d59672fdc8cf6c8a4ef1",
+      "executable": false
+    },
+    "crates/horizon-threads/src/lib.rs": {
+      "sha256": "fa15c90394aded27900ec66db7460418b7675d4dc11c6a7a55cafe99ad982abd",
+      "executable": false
+    },
+    "crates/horizon-threads/src/process_memory.rs": {
+      "sha256": "0763c89a2d4203ab6f219dcc1303f8c83db1af5d9958921b7df3e6de51a7e801",
+      "executable": false
+    },
+    "docs/ios-architecture.md": {
+      "sha256": "362bbdd4a74b378f1ee0131872356b289dd402e2f9f96de8c2e28607f5dbe9ce",
+      "executable": false
+    },
+    "docs/ios-port.md": {
+      "sha256": "87bdc0499720f1113fceebbebed00fb9afb5523b012fa1112aced8a184300f04",
+      "executable": false
+    },
+    "docs/ios-server-compatibility.md": {
+      "sha256": "a6866e259aecf4a69eaf3c24087a3f289393cb40e38fdc1ea2efe2edac254dbf",
+      "executable": false
+    },
+    "docs/ios-validation.md": {
+      "sha256": "81ed600c0e59fc7649b94ca721dc8d3454c8bfff7ad4489423710144db35cfd0",
+      "executable": false
+    },
+    "ios/App/Info.plist": {
+      "sha256": "31c82c87764ac3868fe4ace400f2f2d936d9c2a644f2615377e0599005634963",
+      "executable": false
+    },
+    "ios/App/main.m": {
+      "sha256": "d881e1511b7c4da551ee4a5283e541061f4ca1f59e32de65f965ccf00ce6277e",
+      "executable": false
+    },
+    "ios/HorizonIOS.xcodeproj/project.pbxproj": {
+      "sha256": "a6bcfc957ba47521fd2ff793ec1efee1c191f10aec782d34aab46096a879b57f",
+      "executable": false
+    },
+    "ios/HorizonIOS.xcodeproj/project.xcworkspace/contents.xcworkspacedata": {
+      "sha256": "7f3b00b5c3fdb45242d7b87e1e5c4e25d1fa8129a16c94295ecc4e8ea2235c5f",
+      "executable": false
+    },
+    "ios/HorizonIOS.xcodeproj/xcshareddata/xcschemes/HorizonIOS.xcscheme": {
+      "sha256": "a2deb7295ddb128bdb64702b8936005e371662154c22ea961949b2c7fb89d396",
+      "executable": false
+    },
+    "ios/Resources/PreparedResources/.gitkeep": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "executable": false
+    },
+    "ios/Resources/en.lproj/Localizable.strings": {
+      "sha256": "8ce996540f20b20fe9a46203f91ee94cea68c9e28f2f1a2acfb628d45b373ef6",
+      "executable": false
+    },
+    "ios/UITests/MultiplayerKeyboardTests.m": {
+      "sha256": "d8ebad26980473368438b710e430f145403a97011bf5fd8d15b1de7b6af220ae",
+      "executable": false
+    },
+    "ios/UITests/NavigationKeyboardTests.m": {
+      "sha256": "f0b646fe8e3351fb048b563100a5b13e33f494007de1210a18d972e6ac6be92c",
+      "executable": false
+    },
+    "ios/project.yml": {
+      "sha256": "3d08495e6dcc2c29f0336cb5c46a1078086d4cec929c3d80adb7d032b6519d97",
+      "executable": false
+    },
+    "ios/scripts/build-app.sh": {
+      "sha256": "3de4884437465167f70c379e829ec2f4140ef8c0cf98119813d0135e2e27b1d3",
+      "executable": true
+    },
+    "ios/scripts/build-rust.sh": {
+      "sha256": "7a84b6d403ff9c5d55a834bac93eaf0455562de4eeaec6742d9bcd32b71dac94",
+      "executable": true
+    },
+    "ios/scripts/check_release.py": {
+      "sha256": "8e024257f0ad3610d5f40c2e04f64b7ee65b762ee09a41e1c9cd1d4b82bcc207",
+      "executable": true
+    },
+    "ios/scripts/make-ipa.sh": {
+      "sha256": "6cd47d10886f51f609e0a4b07c59fcab563ef5aafeba80b0af63493717480a18",
+      "executable": true
+    },
+    "ios/scripts/pack-resources.py": {
+      "sha256": "1d9d84b573f3ff0fb697259d45d3635f603199d0c1f26acdfc845910ee72506e",
+      "executable": true
+    },
+    "ios/scripts/verify-app.sh": {
+      "sha256": "a344eaf26c3e2c739b21a8cf0c512336468d30b51d24b0cce49005acf3b6713c",
+      "executable": true
+    },
+    "tests/test_ios_release_privacy.py": {
+      "sha256": "a6676248a8bc1184c665f9d38991bc2f0beba50f00a0f8c64ff9e6b0e3c0d459",
+      "executable": false
+    },
+    "tests/test_ios_resource_pack.py": {
+      "sha256": "8562c046dac0e5f4c7bd1a2f02647c6fa3b6bdf524a1283a22a56314819b3e9e",
+      "executable": false
+    },
+    "tools/ios_streaming_report.py": {
+      "sha256": "5fe209d26bbcf1d62e2d364dd78d800a162dea1643cd8c77ed455d4381836d01",
+      "executable": false
+    },
+    "tools/ios_terrain_fixture.rs": {
+      "sha256": "a78c08337ad0da9510e11e2f5c2d2784c6d3abb824ce874b639c27e8ab51f6e4",
+      "executable": false
+    }
+  }
+}

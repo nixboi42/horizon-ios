@@ -1,0 +1,9 @@
+# Multiplayer native paste diagnostic
+
+The baseline XCTest log shows Select All succeeding immediately before XCTest switches from Horizon to the runner and back to reseed the pasteboard. The editor remains visible, but UIKit offers neither a Paste menu item nor a Paste button. Switching scenes runs the native host's resign-active input reset, which can discard the menu or selection. The logs establish that the test stalls before it invokes paste. The Unicode test demonstrates that the simulator clipboard and UIKit's Paste menu work in chat.
+
+In an isolated simulator build, `address-native-paste.patch` seeds the pasteboard before launch, leaves the app in the foreground after Select All, and uses UIKit's Command-V action for the multiplayer field. It retains the exact IPv6 edit, the reopen assertions and the Direct Connection and Back checks. The Unicode case still invokes the real Paste menu and verifies grapheme-aware editing. This exercises the app's native edit path without depending on menu presentation after a scene transition.
+
+Apply the patch with `git apply /absolute/path/to/downstream/tests/simulator/address-native-paste.patch` in a disposable reconstructed checkout. Build the HorizonIOS scheme for testing on an arm64 simulator with a unique bundle ID and a disposable session. Stage matching resources in that app's Documents/HorizonResources. Run `-only-testing:HorizonIOSUITests/MultiplayerKeyboardTests` against the same build and simulator.
+
+Both cases passed on an arm64 iPhone 17 Pro simulator running iOS 27.0 with the original locked game's Release library. The app and test runner used unique bundle identifiers. This isolates the XCTest menu interaction from the upstream rebase. It does not establish that the multiplayer touch-menu interaction works after resigning and regaining focus.

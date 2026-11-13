@@ -1,0 +1,527 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		22810FA3A9AA0505234C8A14 /* GameController.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 126E808C54BC57AE8BA9552B /* GameController.framework */; };
+		2C560DC228A6AB0BF2A3814B /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0A0874EB0F973A972B828E99 /* Security.framework */; };
+		40C037AE0CF1DDBC318221CE /* MultiplayerKeyboardTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B53430703A1E869D6BBFE79F /* MultiplayerKeyboardTests.m */; };
+		4D4A8ECC33AA45BBCECF8B04 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A7FF304CA0E99C2EA96AFAD6 /* SystemConfiguration.framework */; };
+		5D70201A57CAFBCED11E9BA8 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0068D1496E0BBADF23A447B /* CoreGraphics.framework */; };
+		5E37FFDFACBB818C537DB6E0 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07C7B372C70A059B72436A98 /* UIKit.framework */; };
+		699F791E721CBBEAC9B8278A /* PreparedResources in Resources */ = {isa = PBXBuildFile; fileRef = 8C532A824AC19F6AE986B938 /* PreparedResources */; };
+		733BE7642904485946ABC726 /* NavigationKeyboardTests.m in Sources */ = {isa = PBXBuildFile; fileRef = CEFB4EFECA30C5D8C049AE5D /* NavigationKeyboardTests.m */; };
+		8B5625E7A1B20829FB260F1E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DF5B98FA7C096A02AD85092B /* Foundation.framework */; };
+		8C08037AE99CDDC9A9F19545 /* en.lproj in Resources */ = {isa = PBXBuildFile; fileRef = CEDDCDB9353B3E42F7052ED6 /* en.lproj */; };
+		8F9D00AAC869772FAB593910 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 646C0A797D5FAF7F9E723CE0 /* Metal.framework */; };
+		B3EAC8A3ACDB02AB8FCCBD03 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 261DDF4C3E7DF5811D6662EC /* CoreFoundation.framework */; };
+		ED7496CB9C32AA9D0C6C6106 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 751B4BCFE9B1E6BB738BB17F /* main.m */; };
+		FABFF11A61F3087398E018BF /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D9F8D73DCA873A52B57EE42A /* QuartzCore.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1FF2013D16A4624FEFC0C86F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5BD28918D1F8F820B545EC99 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CF58E58B0B78E5194179994E;
+			remoteInfo = HorizonIOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Deployment.xcconfig; sourceTree = SOURCE_ROOT; };
+		07C7B372C70A059B72436A98 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		0A0874EB0F973A972B828E99 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		0A9C934476AA5D5ABDE33310 /* HorizonIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HorizonIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		126E808C54BC57AE8BA9552B /* GameController.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameController.framework; path = System/Library/Frameworks/GameController.framework; sourceTree = SDKROOT; };
+		261DDF4C3E7DF5811D6662EC /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		646C0A797D5FAF7F9E723CE0 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		751B4BCFE9B1E6BB738BB17F /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		8C532A824AC19F6AE986B938 /* PreparedResources */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PreparedResources; path = Resources/PreparedResources; sourceTree = SOURCE_ROOT; };
+		917611DB4BA0BDDC45BACFB9 /* HorizonIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HorizonIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A7FF304CA0E99C2EA96AFAD6 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		B0068D1496E0BBADF23A447B /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		B53430703A1E869D6BBFE79F /* MultiplayerKeyboardTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MultiplayerKeyboardTests.m; sourceTree = "<group>"; };
+		CEDDCDB9353B3E42F7052ED6 /* en.lproj */ = {isa = PBXFileReference; lastKnownFileType = folder; name = en.lproj; path = Resources/en.lproj; sourceTree = SOURCE_ROOT; };
+		CEFB4EFECA30C5D8C049AE5D /* NavigationKeyboardTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NavigationKeyboardTests.m; sourceTree = "<group>"; };
+		D9F8D73DCA873A52B57EE42A /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		DF5B98FA7C096A02AD85092B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		68D7BB9A8411B64216907C8E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E37FFDFACBB818C537DB6E0 /* UIKit.framework in Frameworks */,
+				8B5625E7A1B20829FB260F1E /* Foundation.framework in Frameworks */,
+				FABFF11A61F3087398E018BF /* QuartzCore.framework in Frameworks */,
+				8F9D00AAC869772FAB593910 /* Metal.framework in Frameworks */,
+				5D70201A57CAFBCED11E9BA8 /* CoreGraphics.framework in Frameworks */,
+				B3EAC8A3ACDB02AB8FCCBD03 /* CoreFoundation.framework in Frameworks */,
+				2C560DC228A6AB0BF2A3814B /* Security.framework in Frameworks */,
+				4D4A8ECC33AA45BBCECF8B04 /* SystemConfiguration.framework in Frameworks */,
+				22810FA3A9AA0505234C8A14 /* GameController.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1DFDCD1089C1865388C3681E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				261DDF4C3E7DF5811D6662EC /* CoreFoundation.framework */,
+				B0068D1496E0BBADF23A447B /* CoreGraphics.framework */,
+				DF5B98FA7C096A02AD85092B /* Foundation.framework */,
+				126E808C54BC57AE8BA9552B /* GameController.framework */,
+				646C0A797D5FAF7F9E723CE0 /* Metal.framework */,
+				D9F8D73DCA873A52B57EE42A /* QuartzCore.framework */,
+				0A0874EB0F973A972B828E99 /* Security.framework */,
+				A7FF304CA0E99C2EA96AFAD6 /* SystemConfiguration.framework */,
+				07C7B372C70A059B72436A98 /* UIKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		8D5F78D013E92A77BFD8532C = {
+			isa = PBXGroup;
+			children = (
+				F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */,
+				CEDDCDB9353B3E42F7052ED6 /* en.lproj */,
+				8C532A824AC19F6AE986B938 /* PreparedResources */,
+				9004F52CCC298E57CAD75ED3 /* App */,
+				952D84D999830E20C360AFA2 /* UITests */,
+				1DFDCD1089C1865388C3681E /* Frameworks */,
+				E843679B8F6C02CEE4CE9E79 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9004F52CCC298E57CAD75ED3 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				751B4BCFE9B1E6BB738BB17F /* main.m */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		952D84D999830E20C360AFA2 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				B53430703A1E869D6BBFE79F /* MultiplayerKeyboardTests.m */,
+				CEFB4EFECA30C5D8C049AE5D /* NavigationKeyboardTests.m */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		E843679B8F6C02CEE4CE9E79 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				917611DB4BA0BDDC45BACFB9 /* HorizonIOS.app */,
+				0A9C934476AA5D5ABDE33310 /* HorizonIOSUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9A12D94BE6FA2E83F7672355 /* HorizonIOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E6EFECE746DA867EE4BF6C2F /* Build configuration list for PBXNativeTarget "HorizonIOSUITests" */;
+			buildPhases = (
+				5F1E59A380D5D4AD8D31F42F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1B3B1D5083F0A1CF4D2E9127 /* PBXTargetDependency */,
+			);
+			name = HorizonIOSUITests;
+			packageProductDependencies = (
+			);
+			productName = HorizonIOSUITests;
+			productReference = 0A9C934476AA5D5ABDE33310 /* HorizonIOSUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		CF58E58B0B78E5194179994E /* HorizonIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F2F7DCB402D357734BD96D46 /* Build configuration list for PBXNativeTarget "HorizonIOS" */;
+			buildPhases = (
+				BD488777003513370BF14212 /* Build Horizon Rust static library */,
+				BA86BEC95613D4BF6C4700E5 /* Sources */,
+				B250EB80CBEB042C6E94394C /* Resources */,
+				68D7BB9A8411B64216907C8E /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HorizonIOS;
+			packageProductDependencies = (
+			);
+			productName = HorizonIOS;
+			productReference = 917611DB4BA0BDDC45BACFB9 /* HorizonIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5BD28918D1F8F820B545EC99 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					9A12D94BE6FA2E83F7672355 = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = CF58E58B0B78E5194179994E;
+					};
+					CF58E58B0B78E5194179994E = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = E3327CAD7DC61ECF95498873 /* Build configuration list for PBXProject "HorizonIOS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 8D5F78D013E92A77BFD8532C;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E843679B8F6C02CEE4CE9E79 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				CF58E58B0B78E5194179994E /* HorizonIOS */,
+				9A12D94BE6FA2E83F7672355 /* HorizonIOSUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B250EB80CBEB042C6E94394C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				699F791E721CBBEAC9B8278A /* PreparedResources in Resources */,
+				8C08037AE99CDDC9A9F19545 /* en.lproj in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		BD488777003513370BF14212 /* Build Horizon Rust static library */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Horizon Rust static library";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/scripts/build-rust.sh\"";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5F1E59A380D5D4AD8D31F42F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				40C037AE0CF1DDBC318221CE /* MultiplayerKeyboardTests.m in Sources */,
+				733BE7642904485946ABC726 /* NavigationKeyboardTests.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA86BEC95613D4BF6C4700E5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ED7496CB9C32AA9D0C6C6106 /* main.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1B3B1D5083F0A1CF4D2E9127 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CF58E58B0B78E5194179994E /* HorizonIOS */;
+			targetProxy = 1FF2013D16A4624FEFC0C86F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0E7D8A50E23DDD79210B7E7D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		156615653FCDC356C4690B6D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../.local/ios-libs/$(PLATFORM_NAME)/$(CONFIGURATION)",
+				);
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lhorizon_ios",
+					"-lc++",
+					"-lresolv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.horizon.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9422164DADE53F16632B3396 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.horizon.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HorizonIOS;
+			};
+			name = Debug;
+		};
+		A9ACDDFD40141C2E22EA1DC9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		EB03DC61E750BD7F095B655E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.horizon.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HorizonIOS;
+			};
+			name = Release;
+		};
+		F74389F13B533B6AD687896B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../.local/ios-libs/$(PLATFORM_NAME)/$(CONFIGURATION)",
+				);
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lhorizon_ios",
+					"-lc++",
+					"-lresolv",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.horizon.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E3327CAD7DC61ECF95498873 /* Build configuration list for PBXProject "HorizonIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				156615653FCDC356C4690B6D /* Debug */,
+				F74389F13B533B6AD687896B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E6EFECE746DA867EE4BF6C2F /* Build configuration list for PBXNativeTarget "HorizonIOSUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9422164DADE53F16632B3396 /* Debug */,
+				EB03DC61E750BD7F095B655E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F2F7DCB402D357734BD96D46 /* Build configuration list for PBXNativeTarget "HorizonIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A9ACDDFD40141C2E22EA1DC9 /* Debug */,
+				0E7D8A50E23DDD79210B7E7D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5BD28918D1F8F820B545EC99 /* Project object */;
+}

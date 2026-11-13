@@ -1,0 +1,15 @@
+diff --git a/crates/horizon-client-render/src/crash.rs b/crates/horizon-client-render/src/crash.rs
+index 502f064ba50eda303f1e5ce1c43933b9b476795b..7d325de3b1474ec7ceca794ca4dfcb5ed3f146f3 100644
+--- a/crates/horizon-client-render/src/crash.rs
++++ b/crates/horizon-client-render/src/crash.rs
+@@ -464,7 +464,10 @@
+     // The workspace as it was on the machine that built this binary (it need not exist here).
+     // A report names workspace files the same way on every host, whatever
+     // separator the build machine used.
++    #[cfg(not(target_os = "ios"))]
+     let manifest = env!("CARGO_MANIFEST_DIR").replace('\\', "/");
++    #[cfg(target_os = "ios")]
++    let manifest = String::from("/build/horizon-ios/crates/horizon-client-render");
+     let root = manifest
+         .strip_suffix("crates/horizon-client-render")
+         .unwrap_or(&manifest);

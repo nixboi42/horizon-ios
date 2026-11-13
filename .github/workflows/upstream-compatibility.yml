@@ -1,0 +1,47 @@
+name: Upstream iOS compatibility
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '19 4 * * 1,4'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: horizon-ios-compatibility
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install the iOS Rust target
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add --toolchain stable aarch64-apple-ios
+          rustup default stable
+      - name: Test downstream tools
+        run: python3 -m unittest discover -s tests
+      - name: Check patches, compile Release and run asset-free tests
+        run: ./build.sh --latest --compile-only --test --report .build/latest.json
+      - name: Upload compatibility report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: upstream-ios-compatibility
+          path: |
+            .build/latest.json
+            upstream.lock
+          if-no-files-found: warn

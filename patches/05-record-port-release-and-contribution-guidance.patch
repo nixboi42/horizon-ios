@@ -1,0 +1,518 @@
+diff --git a/.gitignore b/.gitignore
+index 469760ca63be718b047281e55333c4a4a0631704..abacd84821066f717ebcad4d37387dacf9c29869 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -35,3 +35,20 @@
+ 
+ # Release-only compiled original exporter bundle.
+ /exporters/
++
++# Private development-only iOS resource bundles and Xcode user state.
++/ios/Resources/PreparedResources/*
++!/ios/Resources/PreparedResources/.gitkeep
++/ios/Resources/HorizonResources/
++/HorizonResources/
++/ios/**/*.xcuserstate
++/ios/**/xcuserdata/
++/ios/build/
++/# iOS signing, archives and installable packages never belong in source control.
++*.ipa
++*.xcarchive
++*.mobileprovision
++*.p12
++*.cer
++*.p8
++DerivedData/
+diff --git a/CONTRIBUTING.md b/CONTRIBUTING.md
+index f56913d72e587ce87eb652486352c6a3b724d406..ad1ff881553061a8c77383e6684082bfc49c46c6 100644
+--- a/CONTRIBUTING.md
++++ b/CONTRIBUTING.md
+@@ -1,146 +1,83 @@
+-# Contributing to Horizon
+-
+-Thanks for helping. Horizon is Minecraft: Java Edition 26.3 rewritten in Rust, and the one rule that shapes
+-everything is that **it plays exactly like vanilla**. This page is the short version of how we work; questions are
+-welcome on [Discord](https://discord.gg/playhorizon).
+-
+-This repository holds the game and the launcher, plus the tools, tests and docs that build, check and release them.
+-The website (playhorizon.dev) is built in a separate repository from this one's README, `docs/api/` and roadmap. Anything
+-else (videos, Discord and other community material) lives elsewhere.
+-
+-**Where to start: [playhorizon.dev/hub](https://playhorizon.dev/hub).** It shows what is being done now and next
+-([ROADMAP.md](ROADMAP.md) in the repository), the work board, good first tasks, and the forms to report a bug or
+-suggest something. A pull request for a roadmap item carries its `roadmap:<id>` label; ideas go to the suggestion
+-queue (the hub, or `/suggest` on Discord) rather than to issues, which are for bugs.
+-
+-## Build it
+-
+-- **Prerequisites:** Rust (stable), Python 3.10+, JDK 25, and on Linux the ALSA and udev headers
+-  (`libasound2-dev libudev-dev`).
+-- **Resources:** Horizon never downloads the game; it prepares its resources from your own copy of Minecraft 26.3, as
+-  described in [Build from source](README.md#build-from-source).
+-- **Commands:**
+-
+-  ```sh
+-  cargo run --release -p horizon-prepare -- --prepare --server-jar ~/Downloads/server.jar
+-  cargo run --release -p horizon-client
+-  ```
+-
+-- **Launcher:** its own Cargo workspace in `launcher/` (`cd launcher && cargo run`; on NixOS, `nix-shell` first).
+-
+-## Vanilla first
+-
+-Wherever vanilla has a feature, vanilla is the specification, down to the order of random calls. "Parity" here means
+-Horizon gives the same results as the pinned 26.3 client and server for the same inputs, checked by a **harness**: a
+-`tools/test_*_parity.py` script that runs a small Java oracle against the real game and a Rust probe against Horizon,
+-and compares their outputs.
+-
+-- **Read the vanilla code before writing Horizon's.** `tools/rea_vanilla.py` queries the pinned game bytecode:
+-  `python3 tools/rea_vanilla.py method net.minecraft.world.level.block.DispenserBlock dispenseFrom`.
+-  Say in your pull request which vanilla classes and methods you followed.
+-- **Gameplay changes come with a harness**, new or extended, so the next change can't silently break them.
+-  [The parity workflow](docs/parity-workflow.md) shows how harnesses run; copy a nearby one.
+-- **Horizon's own features** (the launcher, the new menus) follow [the design system](docs/design-system.md) and are
+-  off by default wherever they would change the vanilla look.
+-- **Everything players run is Rust.** Python and Java are fine for dev tools and harness drivers in `tools/`, never
+-  for player-facing code.
+-- **No game files in the repo.** Never commit game files, decompiled source or prepared resources (`.local/`):
+-  `tools/check_public_tree.py` rejects them (`git config core.hooksPath .githooks` runs it before every commit).
+-  The pre-push hook checks the full history reachable from the branches and tags being pushed. Run
+-  `python3 tools/check_public_tree.py --history` to audit the history of all local refs.
+-
+-## Only original code, or code whose license allows it
+-
+-Horizon is MIT. Its code is written from Minecraft 26.3 itself and from public documentation. Since 30 October 2026
+-another project's source may also be read and used, **only when that project's license allows it**:
+-
+-- **Allowed:** MIT, MIT-0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, zlib, Apache-2.0, Unlicense, and the CC0-1.0
+-  public-domain dedication. That code may be read, copied or adapted.
+-- **Off limits, even to read:** GPL, LGPL (Iris), AGPL, MPL, EPL, Polyform (Sodium), the Creative Commons licenses
+-  (CC BY, CC BY-SA, CC BY-NC and the others; CC0 is a public-domain dedication, not one of them), custom or
+-  "source available" licenses, all rights reserved (OptiFine), and any project with no license or an unclear one.
+-  Don't read, copy, translate or paraphrase their source, and don't send code an AI tool wrote from it. Being able
+-  to download a mod or a pack does not give you the right to read its files.
+-- **Check the license yourself.** Read the LICENSE file at the commit you use and the header of each file you take:
+-  some repositories mix licenses, and a file under another license is off limits. A license that changed: the one at
+-  your commit counts. In doubt, don't: ask in #contributors first.
+-- **Say it in the pull request:** the project, a link to the commit, its license, and what you read or copied. A
+-  pull request that used another project's source without saying so is closed.
+-- **Copied or adapted code** keeps its copyright line and license notice at the top of the file, and gets an entry
+-  in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Apache-2.0 code also keeps its NOTICE text and says what
+-  was changed.
+-
+-User documentation and file formats are fine to read, and packs and mods are fine to run and observe, whatever their
+-license. Shader packs are a clean-room rewrite of the pack format, produced from a written description of it (see
+-#1561); they carry no foreign source, and the rules above still apply to anything you read while working on them.
+-
+-## Before asking for review
+-
+-Run the self-check and paste the block it prints into your pull request:
++# Contributing to Horizon iOS
++
++Thanks for helping. This repository is the iOS platform port of [Horizon](https://github.com/horizon-rust/horizon).
++Please keep changes small and platform-focused: gameplay, world generation, protocol and vanilla
++parity fixes belong upstream so every platform benefits from them.
++
++## Before you start
++
++- Search open issues and pull requests. Do not duplicate an existing port.
++- For a behaviour difference, say which is wrong: the iOS host, or the shared Horizon code. If it
++  is shared code, reproduce it on desktop first and consider an upstream issue.
++- Never commit Minecraft files, worlds, account tokens, Apple certificates, provisioning profiles,
++  API keys or personal build-machine paths. See [NOTICE](NOTICE) and run the privacy check below.
++
++## Build and test
++
++Follow [BUILDING.md](BUILDING.md). The fast checks before a pull request:
+ 
+ ```sh
+-python3 tools/pr_ready.py --base upstream/main   # or origin/main if you work on the main repository
++cargo fmt --all -- --check
++cargo clippy --locked -p horizon-ios --all-targets -- -D warnings
++cargo test --locked -p horizon-ios --lib
++python3 -m unittest discover -s tests -p 'test_ios_*.py'
++python3 ios/scripts/check_release.py
+ ```
+ 
+-It looks at what your branch changes and runs what matters: rustfmt, clippy with warnings denied, the tests of the
+-crates you touched (and the launcher's), generated files, `Cargo.lock`, the Python tests, and the vanilla harnesses
+-your change can affect. Without the vanilla data on your machine it lists those harnesses instead; CI runs them.
+-`--quick` skips the harnesses. It exits non-zero when something fails.
+-
+-For the game workspace, Clippy checks all targets of the touched crates and their transitive workspace dependents,
+-including examples. The dependency scope includes optional, platform, build and development dependencies. Tests run
+-library, binary, integration and doc tests without building unrelated example executables. Shared Cargo
+-configuration and toolchain changes select the whole workspace; CI also keeps its workspace-wide checks.
++When you touch shared client code, also run the affected crate's tests and, where possible,
++`cargo check --locked -p horizon-ios --lib --target aarch64-apple-ios`. Device, simulator UI and
++resource-dependent gameplay tests need your own hardware and prepared data; state clearly in the
++pull request which of them you actually ran. A build passing is not the same as gameplay passing.
+ 
+-## Claim before you start
++## Privacy and assets
+ 
+-Work is tracked in GitHub issues, and an issue that is assigned is taken (so is one with the `in progress` label:
+-claimed on Discord with Kira's `/claim`): pick another, or ask its holder in the thread. Before you start, comment
+-**`/claim`** on the issue; you are assigned at once, no role needed. No issue for your work yet? Open one (a line is
+-enough), then claim it. `/unclaim` gives it back. Issues labelled `tracker`, `proposal` or `not claimable` aren't
+-claimed whole: claim one of the issues a tracker lists, or open one for the part you take.
++The release check rejects the common mistakes:
+ 
+-A claim with no open pull request linking the issue (`Fixes #123` in the description, or a draft) is released after
+-5 days, with a comment: open a draft early. You can hold 8 open issues at a time, not counting the ones your
+-pull requests already fix. Agents claim the same way.
++```sh
++python3 ios/scripts/check_release.py                  # publishable Git files
++python3 ios/scripts/check_release.py --tree dist/     # an unpacked artifact
++python3 ios/scripts/check_release.py --archive x.ipa  # archive entries
++```
+ 
+-When your pull request changes the same functions as another open one, or closes the same issue, a bot comment names
+-it (edited on every push, never repeated): talk to its author in the thread before you both finish the same work.
++Keep test data synthetic. Use placeholder home paths in code comments and test fixtures. Put real
++logs, recordings and prepared resources under `.local/` (ignored by Git).
+ 
+ ## Pull requests
+ 
+-- **Small.** One change per pull request, under about 500 lines of code where you can; split bigger work into
+-  pieces that each make sense alone. Small pull requests get reviewed and merged the same day.
+-- **Fill in the template**: what and why, the vanilla reference, the pr_ready block, screenshots for anything you
+-  can see.
+-- **Tick "Allow edits by maintainers".** When something small is left (a lint, a rebase, a nit) we push the fixup
+-  ourselves instead of sending it back to you; only design questions come back.
+-- **Once we've pushed to your branch, merge main into it; don't rebase or force-push.** A rebase or force-push
+-  replaces our commits with yours and erases the fixes we added (it happened on #5188 and #5203). Tell your agent
+-  too: `git merge origin/main`, never `git rebase` or `git push --force` on a branch a maintainer has touched. If
+-  our fixes get erased anyway, we finish the work in our own pull request that keeps your commits and credits you.
+-- **Tick its kind** in the template: `parity` (Horizon now does what vanilla does), `bug` (a crash or breakage),
+-  `perf`, `feature` (new for players), `extra` (Horizon-only, off by default), `tooling` or `docs`. A workflow sets
+-  that label, and area labels (`launcher`, `mobs`, `worldgen`, `rendering`...) from the paths you change.
+-  `label:parity` is the list of real progress toward vanilla.
+-- **Release labels** (we set them if you can't): `feature` also puts it under "New" in the release notes,
+-  `skip-release` when players see no change (tooling, docs, tests), nothing for a fix. `release-now` is for crash
+-  fixes that shouldn't wait. pr_ready suggests one.
+-
+-Who reviews and merges: the Horizon Team, on CI for ordinary pull requests; risky ones (saves, network, world
+-generation, the launcher's updates) wait for a local proof first ([merging](docs/release-flow.md#merging)).
+-
+-Every merge to main is released automatically ([release flow](docs/release-flow.md)), so main always stays playable.
+-How agents, checks, releases and signed updates keep this safe: [security](docs/security.md).
+-
+-## Parity checks on forks
+-
+-The `verify` check (formatting, lints, tests) runs on every pull request. The `parity` check runs the affected
+-harnesses on a maintainer's machine, which holds the game files, so it never runs a fork's code on its own: a
+-maintainer reads your change, then adds the `run-parity` label, which runs it once on your current commit. After
+-new pushes, we add it again.
+-
+-## Talk to us
+-
+-[Discord](https://discord.gg/playhorizon) for questions and ideas, [issues](https://github.com/horizon-rust/horizon/issues)
+-for bugs. To take something on, `/claim` its issue ([above](#claim-before-you-start)).
++- One concern per pull request. Prefer under roughly 500 changed lines.
++- Include what you changed, why, what you tested, the device/iOS version, and any known gap.
++- Add or update tests with observable behaviour, not tests that only restate the implementation.
++- Preserve upstream copyright notices and attribution.
++- If an AI agent helped, say so in the pull request description and in commit trailers, following
++  the upstream project's rules. Do not present agent output as a person's unaided work.
++- Do not add release labels or publish artifacts; the maintainer decides when a release ships.
++
++## Coding notes for this port
++
++- Keep iOS-specific code behind `cfg(target_os = "ios")` or inside `crates/horizon-ios` and `ios/`.
++- Do not fork renderer, gameplay, networking or world code to make iOS compile. Fix the shared crate
++  with the smallest portable change, or add an iOS-only backend next to the existing desktop one.
++- The host must set all sandbox paths before any worker starts. Do not let a worker inherit the
++  developer's working directory.
++- UIKit work stays on the main thread. Resource verification and world generation stay off it.
++- Release held inputs on suspension, focus loss and screen changes.
++- No Java, JIT, dynamic code loading, jailbreak or private Apple API is allowed.
++- Keep user-visible strings in `ios/Resources/en.lproj/Localizable.strings` where UIKit draws them;
++  Horizon's own screens use the upstream translation keys.
++
++## Reporting bugs
++
++Open an issue with:
++
++1. Device model and iOS version.
++2. Commit or release version.
++3. Whether resources were freshly prepared for 26.3.
++4. Exact reproduction steps, including whether the world was new or existing.
++5. Expected and actual behaviour.
++6. The console log, if you can capture it (Xcode, Console.app or the sideloading tool's log).
++
++Redact device identifiers, account names, server addresses you do not want public, and any tokens.
++Do not attach Mojang jars, assets, worlds or Apple signing files.
++
++For the old GrimAC/PacketEvents kick, include the server software, plugin versions and the server
++log. It is a server-side compatibility problem and may not be fixable here.
+diff --git a/README.md b/README.md
+index fa0685bb214919a5c1ffee26c0ba1b85ed26c888..d6b2e999dcedcf6fa40590aa5954de5ffc71ea9e 100644
+--- a/README.md
++++ b/README.md
+@@ -1,158 +1,110 @@
+-<p align="center">
+-  <img src="docs/media/banner.webp" alt="Horizon: the game you know, rebuilt in Rust" width="100%">
+-</p>
+-
+-<p align="center">
+-  <a href="https://playhorizon.dev"><b>Website</b></a> ·
+-  <a href="#download"><b>Download</b></a> ·
+-  <a href="https://playhorizon.dev/docs/"><b>Docs</b></a> ·
+-  <a href="https://discord.gg/playhorizon"><b>Discord</b></a> ·
+-  <a href="ROADMAP.md"><b>Roadmap</b></a> ·
+-  <a href="#contributing"><b>Contributing</b></a>
+-</p>
+-
+-<p align="center">
+-  <img src="https://img.shields.io/badge/vanilla%20parity-100%25-F0795A" alt="Vanilla parity 100%">
+-  <a href="#project-status"><img src="https://img.shields.io/badge/player--visible%20gaps-0%20open-F0795A" alt="Player-visible gaps open"></a>
+-</p>
+-
+-# Horizon
+-
+-**Minecraft: Java Edition 26.3, rewritten in Rust.** Your worlds, the same rules and the same terrain as the Java game, checked against it by hundreds of differential tests, in one native program with no Java. Free, open source (MIT) and unofficial: you play it with your own copy of Java Edition.
+-
+-<p align="center">
+-  <img src="docs/media/readme/valley.webp" alt="A river valley with a plains village, savanna hills and a cherry grove, seen from above with a long view distance" width="100%">
+-</p>
+-
+-## What works today
+-
+-Everything below is in the current release.
+-
+-- **The game.** Survival, creative, hardcore and spectator; vanilla world generation in all three dimensions, mobs, villagers, raids, redstone, every command, the HUD and the recipe book. Vanilla saves open as they are, and worlds from 1.8 to 26.2 are upgraded.
+-- **Multiplayer.** Join vanilla and Horizon servers (online mode included), open a world to LAN, or invite friends with a code from the launcher's Home page.
+-- **Graphics.** Distant terrain up to 1,024 chunks, graphics presets, HDR and controllers, all off by default where they would change the vanilla look ([settings](https://playhorizon.dev/docs/settings)).
+-- **Packs.** Resource packs, data packs and shader packs ([below](#mods-and-shader-packs)).
+-- **Mods.** Content mods and native Rust mods, installed from the launcher ([below](#mods-and-shader-packs)).
+-- **Servers.** Host one from the launcher, or run `horizon-server` on a VPS ([below](#host-a-server)).
+-- **The launcher.** It installs and updates the game, prepares its files from your copy of Minecraft, and updates itself.
+-
+-<table>
+-  <tr>
+-    <td width="50%"><img src="docs/media/readme/sunset.webp" alt="Sunset behind a cherry grove on a hill, with a river below"></td>
+-    <td width="50%"><img src="docs/media/readme/nether.webp" alt="A crimson forest in the Nether, with a piglin among the fungi"></td>
+-  </tr>
+-  <tr>
+-    <td width="50%"><img src="docs/media/readme/survival.webp" alt="Survival in a village square: two villagers, flowers, the hotbar, health and hunger"></td>
+-    <td width="50%"><img src="docs/media/readme/multiplayer.webp" alt="Two players in a LAN world: the other player's name tag and the player list"></td>
+-  </tr>
+-</table>
+-
+-<sub>Nightly 2026-11-05 on a Mac mini (Apple M4 Pro, Metal): vanilla's textures, no mods or shader packs, render distance 32 with distant terrain on.</sub>
+-
+-## Download
+-
+-Get **the Horizon launcher** from [playhorizon.dev](https://playhorizon.dev), or from [the launcher releases](https://github.com/horizon-rust/horizon/releases?q=launcher&expanded=true):
+-
+-| Platform | File | Needs |
+-| --- | --- | --- |
+-| Windows x64 | `horizon-launcher-setup.exe` | Windows 10 or 11, a GPU with Vulkan or DirectX 12 |
+-| Windows on Arm | `horizon-launcher-setup-arm64.exe` | Windows 11 on Arm |
+-| macOS, Apple Silicon | `horizon-launcher-macos-arm64.dmg` | macOS 12 or later |
+-| macOS, Intel | `horizon-launcher-macos-x64.dmg` | macOS 12 or later |
+-| Linux x86-64 | `horizon-launcher-linux-x86_64.AppImage` or `.tar.gz` | a glibc distribution, X11 or Wayland, a GPU with Vulkan or OpenGL 3.3 |
+-
+-**You also need a Microsoft account that owns Minecraft: Java Edition.** You sign in with it in the launcher, which plays only with an account that owns the game ([why](docs/microsoft-account.md)). Horizon contains no Minecraft code or assets: an existing install (official launcher, Prism, MultiMC...) is reused, and without one the launcher downloads 26.3 from Mojang for your account. Step by step: [Install and first launch](https://playhorizon.dev/docs/install).
+-
+-<table>
+-  <tr>
+-    <td width="50%"><img src="docs/media/readme/launcher-home.webp" alt="The launcher's Home page: the Horizon instance, Play, the version picker, the friend invite field, screenshots and the patch log"></td>
+-    <td width="50%"><img src="docs/media/readme/launcher-mods.webp" alt="The launcher's Mods page: Horizon's mod registry with Zoom selected, and tabs for modpacks, resource packs, shader packs and data packs"></td>
+-  </tr>
+-</table>
+-
+-## Mods and shader packs
+-
+-- **Content mods** (`.hmod`): blocks, items, recipes, loot, models and textures, with no code.
+-- **Native mods** (`.hnmod`): Rust that the launcher compiles into the game for you, with nothing to install.
+-- **Java mods** (Fabric, NeoForge, Forge) don't run: Horizon has no Java. The launcher carries over the data and assets inside their jars, and imports modpacks (`.mrpack`, CurseForge zips, Prism instances) the same way ([modpacks](https://playhorizon.dev/docs/modpacks)).
+-- **Shader packs**: Iris/OptiFine-format packs (`shaders/` folders) and Horizon's own WGSL packs, under Video Settings → Shader Packs ([pack format](docs/shaders.md)).
+-
+-Mods are off by default: a fresh install plays exactly like vanilla 26.3. The launcher's Mods page browses Horizon's registry and Modrinth. [Mods](https://playhorizon.dev/docs/mods) · [make a mod](docs/mods.md).
+-
+-## Host a server
+-
+-The launcher's **Servers** page creates, starts, backs up and updates a server, and invites friends. On a VPS, `horizon-server` installs with one command, needs no Java, and takes vanilla 26.3 and Horizon players alike. [Host a server](https://playhorizon.dev/docs/hosting) ([reference](docs/hosting.md)).
+-
+-## Agent control
+-
+-AI agents and scripts can play Horizon. `horizon-ctl`, shipped with the game, reads its state as JSON and acts like a player; `horizon-ctl mcp` serves the same commands over MCP.
+-
+-```sh
+-horizon-ctl launch --world Survival --seed 5 --wait   # finds the version the launcher installed
+-horizon-ctl state                                       # position, health, food, target, screen...
+-horizon-ctl goto -0.5 65 -2.5 --near 2.5                # walks there along a path
+-horizon-ctl break -1 65 -3                              # mines it; replies with the drops
+-```
+-
+-`horizon-ctl help` lists every command. [Agent control](docs/native-client.md#agent-control-horizon-ctl-and-mcp).
+-
+-## Build from source
+-
+-Needs Rust 1.90+, Python 3.10+, JDK 25, and on Linux `libasound2-dev libudev-dev`. `horizon-prepare` builds the game's resources from **your own copy** of Java Edition 26.3 (checked against `research-lock.json`) and never downloads it:
+-
+-1. **Client:** play 26.3 once in the official launcher. Horizon reads `~/.minecraft` (or `--minecraft-dir` / `HORIZON_MINECRAFT_DIR`).
+-2. **Server jar:** the 26.3 server jar (`downloads.server.url` in `versions/26.3/26.3.json`), passed once with `--server-jar` or `HORIZON_SERVER_JAR`.
+-
+-```sh
+-git clone https://github.com/horizon-rust/horizon.git
+-cd horizon
+-cargo run --release -p horizon-prepare -- --prepare --server-jar ~/Downloads/server.jar   # needs JDK 25
+-cargo run --release -p horizon-prepare -- sounds   # optional: sounds from your launcher install
+-cargo run --release -p horizon-client
+-```
+-
+-Prepared files land in the gitignored `.local/`: never commit or share them. Options, controls and architecture: [the native client guide](docs/native-client.md); all developer docs: [docs/README.md](docs/README.md).
++<p align="center"><b>Horizon iOS</b><br>
++<sub>A native iPhone and iPad port of Horizon, the Minecraft: Java Edition 26.3 rewrite in Rust.</sub></p>
++
++> **Unofficial project.** Horizon iOS is not an official Minecraft product, is not approved by or
++> associated with Mojang or Microsoft, and is not affiliated with the Horizon project or its
++> maintainers. Minecraft is a trademark of Mojang Synergies AB. You must own Minecraft: Java
++> Edition 26.3 to prepare and use the game data.
++
++**Status: `v0.1.0-experimental`.** This is a first public experimental release for developers and
++experienced sideloaders. It is **not** on the App Store, has no notarized build, and ships **no
++Minecraft code or assets**. There is no launcher and no Microsoft sign-in. See
++[RELEASE_NOTES.md](RELEASE_NOTES.md) for artifacts, checksums and the verification record.
++
++## What it is
++
++Horizon iOS embeds the real Horizon client — gameplay, world generation, an integrated server,
++multiplayer, saves and the vanilla UI — in a native iOS app. Rendering uses `wgpu` on Metal, the
++window and lifecycle use `winit` on UIKit, and touch input and the keyboard are bridged into
++Horizon's existing actions. There is no Java runtime, no JIT, no interpreter and no jailbreak
++requirement.
++
++The port lives in [`ios/`](ios/) (UIKit host and Xcode project) and
++[`crates/horizon-ios/`](crates/horizon-ios/) (Rust entry point, resource import, lifecycle,
++diagnostic scenes). Gameplay fixes belong upstream; this repository carries only the platform
++integration.
++
++## What works
++
++- **Single player.** A Creative world backed by Horizon's integrated server, with the real
++  Overworld generator, lighting, meshing, block breaking and placement, inventory and saving.
++- **Multiplayer.** Direct address entry, login and play against compatible Java servers. Online-mode
++  authentication has not been validated on iOS; use servers that accept offline profiles unless
++  you have tested your setup.
++- **Touch controls.** Left-thumb movement, right-hand look, jump, break, place, pick block,
++  inventory, pause and chat. Back follows the current screen's own cancellation semantics.
++- **Native text input.** The iOS keyboard edits Horizon's own fields, including server addresses
++  (IPv4, IPv6 and explicit ports), chat, signs, books and dialogs.
++- **Streaming.** Chunk generation, lighting, meshing and upload on Horizon's existing workers, with
++  a small first-launch render distance that can be raised in Video Settings.
++- **Persistence.** Saves in the app sandbox, plus a bounded background save when the app is
++  backgrounded.
++- **Resource import.** The app verifies a content-addressed copy of your own prepared 26.3 files
++  before opening a world. Corrupt or missing files are reported instead of silently loading.
++
++## Tested hardware
++
++These are the devices used by the port's maintainers. Other arm64 devices on iOS 16 or later may
++work, but are untested.
++
++| Device | SoC | OS | Notes |
++| --- | --- | --- | --- |
++| iPhone 13 mini | A15 | iOS 27.2 | Release builds; integrated gameplay, touch controls, native keyboard, background save and relaunch |
++| iPad 5 (`iPad6,11`) | A9, 2 GB RAM | iPadOS 16.7.16 | Older validation build; about 60 FPS in normal play and 40–50 FPS while generating chunks, at 50% render resolution and a 10-chunk setting. Those are user observations, not controlled benchmarks |
++| iPhone 17 Pro simulator | Apple silicon host | iOS 27.0 | Automated UI and gameplay checks |
++
++The current tree's first-launch defaults are more conservative than the iPad figures above: render
++distance 2, simulation distance 5, 60 FPS cap. Raise them in Video Settings on hardware that can
++afford it. Long sessions, thermals, memory pressure on 2 GB devices and modified-block persistence
++after a device save/relaunch still need more validation. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
++
++## Requirements
++
++- An arm64 iPhone or iPad on **iOS/iPadOS 16.0 or later**.
++- A legally owned **Minecraft: Java Edition 26.3** installation on a Mac, used to prepare your own
++  resource files. The app never downloads Minecraft and this repository never contains its data.
++- To build: an Apple silicon Mac with a full Xcode installation and Rust. See
++  [BUILDING.md](BUILDING.md).
++- To install an unsigned IPA: a re-signing tool that accepts your Apple ID or development team
++  (Sideloadly, AltStore, Xcode, or a paid developer account). Free Apple ID signatures expire after
++  seven days.
++
++## Install
++
++1. **Build or obtain an app.** Build from source with [BUILDING.md](BUILDING.md), or re-sign the
++   unsigned IPA as described in [INSTALL.md](INSTALL.md).
++2. **Prepare your own resources** on the Mac and copy the resulting `HorizonResources` folder into
++   the app's Documents folder (Finder → device → Files → Horizon iOS, or the Files app).
++3. **Launch the app.** It verifies the import, then opens the bundled Creative world. The first
++   import can take a while; a progress message is shown.
++
++The full walkthrough, including signing, installing and updating, is in [INSTALL.md](INSTALL.md).
++Exact build commands are in [BUILDING.md](BUILDING.md).
++
++## Known limitations
++
++- No App Store distribution, launcher, Microsoft sign-in, audio output, controller support, Realms
++  or mod installation.
++- Online-mode servers and simultaneous physical multiplayer have not been fully validated.
++- Some older GrimAC/PacketEvents builds kick 26.3 clients when several players join. This was
++  reproduced with vanilla clients and is a server-side plugin compatibility problem; see
++  [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
++- Performance varies by device. No thermal, long-run or controlled frame-time study exists yet.
++
++## Upstream, license and attribution
++
++Horizon iOS is a port of [Horizon](https://github.com/horizon-rust/horizon), MIT-licensed software
++by Ludovic Marie and the Horizon contributors. The original copyright notice is preserved in
++[LICENSE](LICENSE). Third-party Rust dependencies and their licenses are listed in
++[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); the full dependency graph is pinned by
++`Cargo.lock`.
++
++This port's changes are released under the same MIT license. Minecraft game code, assets, worlds,
++accounts and signing credentials are **not** part of this repository or its releases. See
++[NOTICE](NOTICE) for the trademark and asset statement.
+ 
+ ## Contributing
+ 
+-Issues and pull requests are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) (vanilla first, small pull requests), and see [ROADMAP.md](ROADMAP.md) or [playhorizon.dev/hub](https://playhorizon.dev/hub) for what's next. Questions: [Discord](https://discord.gg/playhorizon). Before a pull request, run the self-check and paste its output:
+-
+-```sh
+-git config core.hooksPath .githooks
+-python3 tools/pr_ready.py
+-```
+-
+-It runs rustfmt, clippy, the touched crates' tests, the Python tests, the public-tree check and the vanilla harnesses your change affects. Never commit game files, decompiled source or prepared resources.
+-
+-## Project status
+-
+-**Player-visible gaps: 0 open** of the 833 the [port ledger](tools/port_ledger.py) found, reading every vanilla 26.3 method against Horizon's code: vanilla behaviour a player would notice that Horizon doesn't have yet. By area: Animals [0](https://github.com/horizon-rust/horizon/issues/3512); Monsters and bosses [0](https://github.com/horizon-rust/horizon/issues/3513); Entities, projectiles, vehicles and decorations [0](https://github.com/horizon-rust/horizon/issues/3514); Items, enchantments and inventories [0](https://github.com/horizon-rust/horizon/issues/3515); Blocks, redstone and fluids [0](https://github.com/horizon-rust/horizon/issues/3516); World, world generation and saves [0](https://github.com/horizon-rust/horizon/issues/3517); Screens, HUD and client packets [0](https://github.com/horizon-rust/horizon/issues/3518); Entity and block rendering, models [0](https://github.com/horizon-rust/horizon/issues/3519); Server and players on the server [0](https://github.com/horizon-rust/horizon/issues/3520); Mob AI, villagers and raids [0](https://github.com/horizon-rust/horizon/issues/3521). This number goes down as gaps close (`tools/parity_gaps.py`); the harness results below say that what is tested matches.
+-
+-The table is the project's own audit: every subsystem matches vanilla in every harness that compares it. 100% means 100% of what the harnesses compare, not that nothing else differs. What players still run into: [known issues](docs/known-issues.md).
+-
+-### Java parity: 100%
+-
+-Scores: 0 (absent), 0.25 (started), 0.5 (playable, major features missing), 0.75 (mostly complete) or 1 (complete and verified by differential tests); the percentage is their average. Last audited 2026-10-13: the harnesses pass on Linux and macOS. The [port ledger](tools/port_ledger.py) adds a method-by-method view of what is ported.
+-
+-| Subsystem | Score | Main gaps |
+-| --- | ---: | --- |
+-| Window, input and game loop | 1 | None: game loop, options, camera, auto-jump, toggle sprint/sneak and frame limiter match |
+-| Assets and resources | 1 | None: item models match over 196,290 stacks; the resource pack screen over 3,000 sessions |
+-| Network protocol and multiplayer | 1 | None: joins vanilla servers; the dedicated server matches vanilla's files, login, configuration, play and command tree; LAN discovery over 462 cases (offline mode only) |
+-| Chunk storage and palettes | 1 | None: client and saves share paletted containers, identical to vanilla over 266 scenarios |
+-| Section meshing | 1 | None: 112 scenes and over a million quads identical to vanilla |
+-| Rendering | 1 | None: entity models, block entity renderers (407 cases) and animations (296), HUD overlays (2,200 states), the recipe book (600), player list, subtitles and world border match |
+-| Lighting | 1 | None: saved and relit light matches vanilla, slabs and stairs included |
+-| World generation | 1 | None: 2,352 whole chunks over 225 structure sites, in all three dimensions, identical to vanilla |
+-| Region files and saves | 1 | None: saves round-trip with vanilla; worlds from 1.8 to 26.2 upgrade as vanilla's DataFixers do |
+-| Entities and physics | 1 | None: attributes, spawn rules, natural spawning (15,500 cases), raids and patrols (1,900), `finalizeSpawn` (24,000) and mob AI (92 scenarios) match |
+-| Interaction and inventory | 1 | None: menu clicks over 8,000 sequences; recipe book placement (6,000), buttons (1,200), saved book (1,500), loom and crafter screens (1,600) |
+-| Menus, HUD and chat | 1 | None: every command (758 over 39,685 inputs), scoreboards (81,000 operations), the player list (872,000 draw calls), chat and its suggestions (3,000 sessions) match |
+-| Audio | 1 | None: the sound engine, sound events, music, situational music, ambience and subtitles match vanilla |
+-| Block behaviours and ticking | 1 | None: block updates, random ticks, redstone, dispensers (6,000 cases), crafters (4,000), container spills (4,000), copper golems and the sculk family (435 scenarios) match |
+-
+-## Licence
+-
+-[MIT](LICENSE), for the project's original work; dependencies keep their own licences ([notices](THIRD_PARTY_NOTICES.md)). Horizon is made by [Ludovic Marie](https://lu4ovic.com) ([@ludovic111](https://github.com/ludovic111)) and [its contributors](https://github.com/horizon-rust/horizon/graphs/contributors); support it on [GitHub Sponsors](https://github.com/sponsors/ludovic111).
+-
+-NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT. Minecraft is a trademark of Mojang Synergies AB; its code and assets belong to Mojang and Microsoft under the [Minecraft EULA](https://www.minecraft.net/en-us/eula).
++Bug reports, device reports and small, focused pull requests are welcome. Read
++[CONTRIBUTING.md](CONTRIBUTING.md) first. Gameplay and parity changes should go to the upstream
++Horizon repository so all platforms benefit.

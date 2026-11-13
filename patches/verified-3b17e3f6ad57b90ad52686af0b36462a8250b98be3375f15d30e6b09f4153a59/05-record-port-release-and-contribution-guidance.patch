@@ -1,0 +1,25 @@
+diff --git a/.gitignore b/.gitignore
+index 469760ca63be718b047281e55333c4a4a0631704..abacd84821066f717ebcad4d37387dacf9c29869 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -35,3 +35,20 @@
+ 
+ # Release-only compiled original exporter bundle.
+ /exporters/
++
++# Private development-only iOS resource bundles and Xcode user state.
++/ios/Resources/PreparedResources/*
++!/ios/Resources/PreparedResources/.gitkeep
++/ios/Resources/HorizonResources/
++/HorizonResources/
++/ios/**/*.xcuserstate
++/ios/**/xcuserdata/
++/ios/build/
++/# iOS signing, archives and installable packages never belong in source control.
++*.ipa
++*.xcarchive
++*.mobileprovision
++*.p12
++*.cer
++*.p8
++DerivedData/

@@ -1,0 +1,12 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 828c7d85afd6b4d99a045ac243c9512d52c87e3d..2cef16e432f098cfd4f02c34afa2cdcae0958efe 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -3,6 +3,7 @@ exclude = ["launcher", "crates/horizon-telemetry-server", "crates/horizon-mod-re
+ members = [
+     "crates/horizon-addresses",
+     "crates/horizon-core",
++    "crates/horizon-ios",
+     "crates/horizon-dualsense",
+     "crates/horizon-narrator",
+     "crates/horizon-threads",

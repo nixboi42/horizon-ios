@@ -1,0 +1,1139 @@
+diff --git a/crates/horizon-client-render/src/controller_ui.rs b/crates/horizon-client-render/src/controller_ui.rs
+index 46113ff2f997cd9360afd2584c53049de50e22ca..5407c61913e18bd43a1c713db2d6e263020a9dc9 100644
+--- a/crates/horizon-client-render/src/controller_ui.rs
++++ b/crates/horizon-client-render/src/controller_ui.rs
+@@ -1173,6 +1173,13 @@ impl ControllerUi {
+         self.focus == Some(Target::Search)
+     }
+     /// Text typed into the search field (the keyboard, a controller's on-screen keyboard).
++    pub fn mobile_edit(&mut self, f: impl FnOnce(&mut ui::EditBox)) {
++        let before = self.search.value.clone();
++        f(&mut self.search);
++        if self.search.value != before {
++            self.searched();
++        }
++    }
+     pub fn type_text(&mut self, text: &str) {
+         if !text.is_empty() {
+             self.search.insert_text(text);
+diff --git a/crates/horizon-client-render/src/graphics_ui.rs b/crates/horizon-client-render/src/graphics_ui.rs
+index 9d6167378d6bfcfd920a5963e3fc0ff325b5615e..2242c7ce074ebc165a92c3bf3489c8df7ae77ab4 100644
+--- a/crates/horizon-client-render/src/graphics_ui.rs
++++ b/crates/horizon-client-render/src/graphics_ui.rs
+@@ -2054,6 +2054,13 @@ impl GraphicsUi {
+         self.focus == Some(Target::Search)
+     }
+     /// Text typed into the search field (the keyboard, a controller's on-screen keyboard).
++    pub fn mobile_edit(&mut self, f: impl FnOnce(&mut ui::EditBox)) {
++        let before = self.search.value.clone();
++        f(&mut self.search);
++        if self.search.value != before {
++            self.searched();
++        }
++    }
+     pub fn type_text(&mut self, text: &str) {
+         if !text.is_empty() {
+             self.search.insert_text(text);
+diff --git a/crates/horizon-client-render/src/multiline_edit.rs b/crates/horizon-client-render/src/multiline_edit.rs
+index 92e79fdcdf25943ef58a9867ea07e07f125803a9..6994b8d34f46e63a91c69844e377bbbb466e01b9 100644
+--- a/crates/horizon-client-render/src/multiline_edit.rs
++++ b/crates/horizon-client-render/src/multiline_edit.rs
+@@ -117,6 +117,27 @@ impl MultiLineEdit {
+     pub fn value(&self) -> String {
+         self.chars.iter().collect()
+     }
++    /// Transactional platform editor; retain this widget's line and character limits.
++    pub fn mobile_edit(&mut self, font: &Font, f: impl FnOnce(&mut crate::ui::EditBox)) {
++        let mut edit = crate::ui::EditBox::new(self.x, self.y, self.width, self.height);
++        edit.value = self.value();
++        edit.cursor = self.cursor;
++        edit.highlight = self.select_cursor;
++        edit.multiline = true;
++        edit.focused = self.focused;
++        edit.max_length = self.character_limit.unwrap_or(usize::MAX);
++        f(&mut edit);
++        if edit.value != self.value() {
++            let clean = filter_text(&edit.value, true);
++            if self.overflows_line_limit(font, &clean.chars().collect::<Vec<_>>()) {
++                return;
++            }
++            self.set_value(font, &clean);
++        }
++        self.cursor = edit.cursor.min(self.chars.len());
++        self.select_cursor = edit.highlight.min(self.chars.len());
++        self.scroll_to_cursor();
++    }
+     pub fn cursor(&self) -> usize {
+         self.cursor
+     }
+@@ -781,4 +802,25 @@ mod tests {
+         edit.click(&font, (4.0 + 1.0, 4.0 + 1.0), false, true);
+         assert_eq!(edit.selected_text(), "abcd");
+     }
++    #[test]
++    fn mobile_transaction_keeps_unicode_selection_and_rejects_excess_lines() {
++        let font = font();
++        let mut area = MultiLineEdit::new(&font, 0., 0., 200., 40.);
++        area.set_focused(true);
++        area.set_character_limit(32);
++        area.set_line_limit(2);
++        area.set_value(&font, "İ😀\nşğ");
++        area.mobile_edit(&font, |edit| {
++            edit.set_cursor(1, false);
++            edit.highlight = 2;
++            edit.insert_text("öü");
++        });
++        assert_eq!(area.value(), "İöü\nşğ");
++        assert_eq!(area.cursor(), 3);
++        area.mobile_edit(&font, |edit| {
++            edit.value = "a\nb\nc".into();
++        });
++        assert_eq!(area.value(), "İöü\nşğ");
++        assert_eq!(area.cursor(), 3);
++    }
+ }
+diff --git a/crates/horizon-client-render/src/options_ui.rs b/crates/horizon-client-render/src/options_ui.rs
+index ca0c69c6dcb11c272d1803cecb42ce171d7349dd..0f2dabe9a27552177400693b0ec986247e9b245d 100644
+--- a/crates/horizon-client-render/src/options_ui.rs
++++ b/crates/horizon-client-render/src/options_ui.rs
+@@ -2049,6 +2049,7 @@ impl OptionsUi {
+         self.resource_error.is_none()
+             && match self.page() {
+                 Page::Language => true,
++                Page::SplitProfiles => self.split_profiles.typing(),
+                 Page::Packs => self
+                     .pack_screen
+                     .as_ref()
+@@ -4640,6 +4641,41 @@ impl OptionsUi {
+         }
+         events
+     }
++    pub fn mobile_pack_edit(&mut self, f: impl FnOnce(&mut crate::screen_draw::TextField)) {
++        if self.page() == Page::Packs
++            && let Some(pack) = self.pack_screen.as_mut()
++        {
++            pack.mobile_edit(f);
++        }
++    }
++    /// UIKit uses the existing search boxes and their focus, limits and selection.
++    pub fn mobile_edit(&mut self, f: impl FnOnce(&mut crate::ui::EditBox)) {
++        if !self.typing() {
++            return;
++        }
++        let mut changed = false;
++        let f = |edit: &mut crate::ui::EditBox| {
++            let before = edit.value.clone();
++            f(edit);
++            changed = edit.value != before;
++        };
++        if self.page() == Page::SplitProfiles {
++            self.split_profiles.mobile_edit(f);
++        } else if self.page() == Page::Language {
++            f(&mut self.language_search);
++        } else if Self::graphics_page(self.page()).is_some() {
++            self.graphics.mobile_edit(f);
++        } else if Self::controller_page(self.page()).is_some() {
++            self.controller.mobile_edit(f);
++        } else if Self::shader_page(self.page()).is_some() {
++            self.shader.mobile_edit(f);
++        } else if self.settings_search_active() {
++            f(&mut self.settings_search);
++        }
++        if changed {
++            self.scroll = 0.0;
++        }
++    }
+     /// Typed text (the language search box).
+     pub fn type_text(&mut self, atlas: &HudAtlas, text: &str) {
+         if self.resource_error.is_some() {
+@@ -8334,4 +8370,17 @@ mod tests {
+             ui.shift = false;
+         }
+     }
++    #[test]
++    fn mobile_language_snapshot_and_cursor_edits_preserve_list_scroll() {
++        let mut ui = OptionsUi::default();
++        ui.show(Page::Language);
++        ui.scroll = 40.0;
++        ui.mobile_edit(|_| {});
++        assert_eq!(ui.scroll, 40.0);
++        ui.mobile_edit(|edit| edit.insert_text("Turkish"));
++        assert_eq!(ui.scroll, 0.0);
++        ui.scroll = 40.0;
++        ui.mobile_edit(|edit| edit.set_cursor(0, false));
++        assert_eq!(ui.scroll, 40.0);
++    }
+ }
+diff --git a/crates/horizon-client-render/src/pack_screen.rs b/crates/horizon-client-render/src/pack_screen.rs
+index f6a4440ed793c0557e643c08e616ac2c30f2dfd2..c5b008c73adb5426a308e992862158adb213b6dd 100644
+--- a/crates/horizon-client-render/src/pack_screen.rs
++++ b/crates/horizon-client-render/src/pack_screen.rs
+@@ -834,6 +834,17 @@ impl PackScreen {
+         }
+     }
+     /// Typed text, when the search box has the focus.
++    pub fn mobile_edit(&mut self, f: impl FnOnce(&mut TextField)) {
++        if self.browser.is_some() {
++            f(&mut self.browser_search);
++        } else if self.search_focused() {
++            let before = self.search.value.clone();
++            f(&mut self.search);
++            if self.search.value != before {
++                self.filter(None);
++            }
++        }
++    }
+     pub fn type_text(&mut self, m: &Measure, s: &str) {
+         if self.browser.is_some() {
+             self.browser_search.insert_text(m, s);
+diff --git a/crates/horizon-client-render/src/shader_ui.rs b/crates/horizon-client-render/src/shader_ui.rs
+index 20af75b591fa6773af4eefd5885a4cc11eb0dcc8..b694327f9735a9247e5433633a0600d91bb63311 100644
+--- a/crates/horizon-client-render/src/shader_ui.rs
++++ b/crates/horizon-client-render/src/shader_ui.rs
+@@ -1071,6 +1071,13 @@ impl ShaderUi {
+     pub fn typing(&self) -> bool {
+         self.focus == Some(Target::Search)
+     }
++    pub fn mobile_edit(&mut self, f: impl FnOnce(&mut ui::EditBox)) {
++        let before = self.search.value.clone();
++        f(&mut self.search);
++        if self.search.value != before {
++            self.searched();
++        }
++    }
+     pub fn type_text(&mut self, text: &str) {
+         if !text.is_empty() {
+             self.search.insert_text(text);
+diff --git a/crates/horizon-client-render/src/split_profiles.rs b/crates/horizon-client-render/src/split_profiles.rs
+index d2446f67043444790399cdf3c7c083b8cbaca184..c959e79ae102c8c370b2fc7bc75bdbc7c582d2b3 100644
+--- a/crates/horizon-client-render/src/split_profiles.rs
++++ b/crates/horizon-client-render/src/split_profiles.rs
+@@ -492,6 +492,14 @@ impl SplitProfiles {
+         }
+     }
+ 
++    pub fn mobile_edit(&mut self, f: impl FnOnce(&mut ui::EditBox)) {
++        if let Some(edit) = self.new.as_mut().filter(|e| e.focused) {
++            f(edit);
++        }
++    }
++    pub fn typing(&self) -> bool {
++        self.new.as_ref().is_some_and(|e| e.focused)
++    }
+     pub fn type_text(&mut self, text: &str) {
+         if let Some(field) = self.new.as_mut().filter(|f| f.focused) {
+             field.insert_text(text);
+diff --git a/crates/horizon-client/src/game.rs b/crates/horizon-client/src/game.rs
+index 82b110eaca55d34ebaa255dc659020278a8bcb56..4559df983601ef6b9c379a5f3570098a7e853fc2 100644
+--- a/crates/horizon-client/src/game.rs
++++ b/crates/horizon-client/src/game.rs
+@@ -211,6 +211,7 @@ mod mob_gear;
+ mod mob_index;
+ mod mob_looting;
+ mod mob_sounds;
++pub mod mobile;
+ mod mod_api_host;
+ mod mod_browser;
+ mod mods;
+@@ -3347,6 +3348,8 @@ struct Game<'a> {
+     /// Number keys since the last tick (`keyHotbarSlots[i].consumeClick`):
+     /// `Minecraft.handleKeybinds` selects them after the tick's pick.
+     hotbar_presses: Vec<usize>,
++    // Drawable pixels reserved by the mobile host below the gameplay HUD.
++    mobile_hud_bottom_inset: f64,
+     /// `Player.entityInteractionRange` and `blockInteractionRange`, refreshed
+     /// each tick from the attribute (a server's reach modifier, creative's
+     /// +2): the pick helpers' `&self` reach.
+@@ -8820,7 +8823,7 @@ impl Game<'_> {
+         };
+         let scale = HudBatch::new(size).scale;
+         let was_grabbed = self.captured;
+-        if self.options.offscreen && !self.split_window {
++        if cfg!(target_os = "ios") || (self.options.offscreen && !self.split_window) {
+             // A genuinely hidden `--offscreen` run leaves the system pointer where
+             // the person at the computer has it. Its grab is internal (an
+             // agent turns the view with `mouse-move`).
+@@ -9216,6 +9219,8 @@ impl Game<'_> {
+         // the sleep overlay, debug screen and open screens still draw.
+         let spectator = self.spectator();
+         let (wi, hi) = (w as i32, h as i32);
++        let hud_bottom =
++            hud_layout::HotbarLayout::safe_bottom(&batch, size[1], self.mobile_hud_bottom_inset);
+         let in_studio = self.studio_replay.is_some();
+         let show_hud = !self.ui.hide_gui && !in_studio;
+         if show_hud {
+@@ -9255,7 +9260,7 @@ impl Game<'_> {
+             }
+             self.gui_layer("minecraft:hotbar", &mut batch, |g, batch| {
+                 if spectator {
+-                    g.draw_spectator_hotbar(batch);
++                    g.draw_spectator_hotbar(batch, hud_bottom);
+                 } else {
+                     let partial = g.clock.fraction() as f32;
+                     let inputs = hud_layout::HotbarInputs {
+@@ -9270,7 +9275,7 @@ impl Game<'_> {
+                         offhand_pop: (f32::from(g.hotbar_pop[9]) - partial).max(0.0),
+                         attack: (indicator == 2).then_some(strength),
+                     };
+-                    let draws = hud_layout::hotbar(wi, hi, &inputs);
++                    let draws = hud_layout::hotbar(wi, hud_bottom, &inputs);
+                     hud_layout::paint(batch, &g.gui.atlas, &draws);
+                     for d in &draws {
+                         if let hud_layout::GuiDraw::Item { slot, x, y, .. } = *d {
+@@ -9314,17 +9319,18 @@ impl Game<'_> {
+             let vehicle_hearts = if spectator {
+                 0
+             } else {
+-                self.draw_mount_hud(&mut batch, wi, hi)
++                self.draw_mount_hud(&mut batch, wi, hud_bottom)
+             };
+             // The one bar above the hotbar: the mount's jump bar, the locator
+             // bar (with its background) or the experience bar, with the level
+             // number that a survival player always has.
+             self.gui_layer("minecraft:contextual_info_bar", &mut batch, |g, batch| {
+                 if contextual == ContextualBar::JumpableVehicle {
+-                    g.draw_jump_bar(batch, wi, hi);
++                    g.draw_jump_bar(batch, wi, hud_bottom);
+                 }
+                 if contextual == ContextualBar::Locator {
+-                    let (sprite, [x, y, w, h]) = horizon_client::locator_bar::background(wi, hi);
++                    let (sprite, [x, y, w, h]) =
++                        horizon_client::locator_bar::background(wi, hud_bottom);
+                     horizon_client::ui::nine_slice(
+                         batch,
+                         &g.gui.atlas,
+@@ -9341,7 +9347,7 @@ impl Game<'_> {
+                     let width = |s: &str| HudBatch::text_width(atlas, s) as i32;
+                     let draws = hud_layout::experience(
+                         wi,
+-                        hi,
++                        hud_bottom,
+                         g.experience.progress,
+                         g.experience.level,
+                         contextual == ContextualBar::Experience,
+@@ -9350,7 +9356,7 @@ impl Game<'_> {
+                     hud_layout::paint(batch, atlas, &draws);
+                 }
+                 if contextual == ContextualBar::Locator {
+-                    let draws = g.locator_bar_draws(wi, hi);
++                    let draws = g.locator_bar_draws(wi, hud_bottom);
+                     hud_layout::paint(batch, &g.gui.atlas, &draws);
+                 }
+             });
+@@ -9398,10 +9404,10 @@ impl Game<'_> {
+                 // The native mods' health HUD (`native_health_hud`): a mod
+                 // that answers draws every row instead.
+                 let mut native_health_hud = None;
+-                self.native_health_hud(&inputs, wi, hi, &mut native_health_hud);
++                self.native_health_hud(&inputs, wi, hud_bottom, &mut native_health_hud);
+                 let draws = match native_health_hud {
+                     Some(draws) => draws,
+-                    None => self.health_hud.layout(&inputs, wi, hi),
++                    None => self.health_hud.layout(&inputs, wi, hud_bottom),
+                 };
+                 // The rows draw in one pass here, so a mod's `player_health`
+                 // layer stands for the armor, food and air rows too.
+@@ -9423,7 +9429,7 @@ impl Game<'_> {
+             }
+             if !spectator {
+                 self.gui_layer("minecraft:selected_item_name", &mut batch, |g, batch| {
+-                    g.draw_selected_name(batch, !g.creative);
++                    g.draw_selected_name(batch, hud_bottom, !g.creative);
+                 });
+             }
+         }
+@@ -9434,7 +9440,7 @@ impl Game<'_> {
+         });
+         if show_hud {
+             self.gui_layer("minecraft:overlay_message", &mut batch, |g, batch| {
+-                g.draw_overlay_message(batch);
++                g.draw_overlay_message(batch, hud_bottom);
+             });
+             self.gui_layer("minecraft:title", &mut batch, |g, batch| {
+                 g.draw_title(batch);
+@@ -9452,7 +9458,14 @@ impl Game<'_> {
+             && at.elapsed() < Duration::from_secs(3)
+         {
+             let tw = HudBatch::text_width(atlas, text);
+-            batch.text(atlas, text, (w - tw) / 2.0, h - 59.0, u32::MAX, true);
++            batch.text(
++                atlas,
++                text,
++                (w - tw) / 2.0,
++                hud_bottom as f32 - 59.0,
++                u32::MAX,
++                true,
++            );
+         }
+         // The chat screen draws the focused chat itself; F1 hides the rest.
+         if self.screen == Screen::Chat {
+@@ -20720,6 +20733,7 @@ impl<'a> Game<'a> {
+             tick_hit: None,
+             tick_mob: None,
+             hotbar_presses: Vec::new(),
++            mobile_hud_bottom_inset: 0.0,
+             entity_reach: 3.0,
+             block_reach: 4.5,
+             guest_use: None,
+@@ -21398,6 +21412,11 @@ impl Progress {
+ /// Harness and dedicated runs keep the fully-synchronous startup so their
+ /// output stays byte-identical; only an ordinary launch shows the window first.
+ fn synchronous_startup(options: &Options) -> bool {
++    // UIKit must keep receiving lifecycle events even with an opt-in control
++    // socket. Mobile always polls world entry instead of waiting for the server.
++    if cfg!(target_os = "ios") && options.execution_role.is_client() {
++        return false;
++    }
+     // A headless game has no window for the loading screen.
+     options.headless
+         || options.frames.is_some()
+@@ -22197,7 +22216,9 @@ fn build_renderer(
+     // Made here when the worker did not: the renderer's own fallback has no LabPBR maps.
+     let prepared = Some(prepared.unwrap_or_else(|| prepare_renderer_textures(pack)));
+     let atlas_pixels = atlas.pixels();
+-    let mut renderer = pollster::block_on(Renderer::new(
++    // UIKit's main stack is only about 1 MiB. Keep the large async
++    // renderer state on the heap during the loading-to-world handoff.
++    let mut renderer = pollster::block_on(Box::pin(Renderer::new(
+         window,
+         offscreen,
+         &assets.pixels.get(),
+@@ -22223,7 +22244,7 @@ fn build_renderer(
+         shader_pack.draws_flat,
+         shader_pack.linear,
+         shader_pack.hdr_float,
+-    ))?;
++    )))?;
+     renderer.hud.sprite_animations = atlas
+         .sprite_animations
+         .iter()
+@@ -22273,7 +22294,9 @@ fn loading_renderer(
+     if let Some(atlas) = atlas {
+         atlas.font.reset_cache();
+     }
+-    let mut renderer = pollster::block_on(Renderer::new(
++    // UIKit's main stack is only about 1 MiB. Keep the large async
++    // renderer state on the heap during the loading-to-world handoff.
++    let mut renderer = pollster::block_on(Box::pin(Renderer::new(
+         window,
+         offscreen,
+         &[255, 255, 255, 255],
+@@ -22297,7 +22320,7 @@ fn loading_renderer(
+         false,
+         false,
+         false,
+-    ))?;
++    )))?;
+     if let Some(atlas) = atlas {
+         renderer.hud.sprite_animations = atlas
+             .sprite_animations
+@@ -22425,7 +22448,7 @@ fn start_game<'a>(
+     settings: Option<Settings>,
+     prepared: Option<GameCpuResources>,
+     entity_models: Option<Arc<horizon_client::mobs::EntityModelDocument>>,
+-) -> Result<Option<Game<'a>>> {
++) -> Result<Option<Box<Game<'a>>>> {
+     let handoff = prepared.is_some();
+     let mut settings = match settings {
+         Some(settings) => settings,
+@@ -22443,7 +22466,9 @@ fn start_game<'a>(
+             entity_models.as_deref(),
+         )?),
+     };
+-    let mut game = Game::new(res, pack, gui, options, settings, audio, prepared)?;
++    let mut game = Box::new(Game::new(
++        res, pack, gui, options, settings, audio, prepared,
++    )?);
+     game.rest_loader = rest_loader;
+     game.ui.vanilla_root = vanilla_root;
+     if let Some(error) = pack_error {
+@@ -22884,7 +22909,7 @@ impl Loading {
+             );
+         }
+     }
+-    fn finish(&mut self, loaded: Loaded) -> Result<Option<split::Split<'static>>> {
++    fn finish(&mut self, loaded: Loaded) -> Result<Option<Box<Game<'static>>>> {
+         let handoff_at = Instant::now();
+         let mut options = self.options.take().ok_or("loading already finished")?;
+         options.resources = loaded.root.clone();
+@@ -22972,10 +22997,18 @@ impl Loading {
+             renderer_ms,
+             game_ms
+         );
+-        Ok(Some(split::Split::new(game)))
++        Ok(Some(game))
+     }
+ }
+ 
++// Keep the by-value Game/Split construction copies in a separate frame,
++// after Loading::finish (and renderer initialization) has returned. UIKit's
++// 1 MiB main stack cannot hold all of those stages at the same time.
++#[inline(never)]
++fn split_loaded_game(game: Box<Game<'static>>) -> Box<split::Split<'static>> {
++    Box::new(split::Split::new(*game))
++}
++
+ /// The application: the loading screen until the resources are ready, then
+ /// the game itself, on the same event loop and window.
+ enum App {
+@@ -23026,7 +23059,7 @@ impl ApplicationHandler for App {
+                     None => Step::Waiting,
+                     Some(Err(e)) => Step::Failed(e.into()),
+                     Some(Ok(loaded)) => match loading.finish(loaded) {
+-                        Ok(Some(game)) => Step::Ready(Box::new(game)),
++                        Ok(Some(game)) => Step::Ready(split_loaded_game(game)),
+                         Ok(None) => Step::Done,
+                         Err(e) => Step::Failed(e),
+                     },
+@@ -23119,20 +23152,18 @@ fn unclean_start_recovery(settings: &mut Settings) -> bool {
+     unclean
+ }
+ 
+-/// The ordinary launch: load the resources on a worker while the window shows
+-/// the loading screen, then swap in the game on the main thread.
+-fn run_loading(
++fn new_loading(
+     options: Options,
+     settings: Settings,
+     vanilla_root: PathBuf,
+     pack_error: Option<String>,
+     started: Instant,
+-) -> Result<()> {
++) -> Result<Loading> {
+     let progress = Progress::new();
+     let (receiver, loader) =
+         startup_menu::spawn_loader(&options, &settings, &vanilla_root, started, &progress)?;
+     let menu = startup_menu::StartupMenu::new(&options, pack_error.as_deref())?;
+-    let loading = Loading {
++    Ok(Loading {
+         window: None,
+         renderer: None,
+         boot: horizon_client::hud::HudAtlas::boot(),
+@@ -23155,7 +23186,19 @@ fn run_loading(
+         title_drawn: false,
+         menu,
+         error: None,
+-    };
++    })
++}
++
++/// The ordinary launch: load the resources on a worker while the window shows
++/// the loading screen, then swap in the game on the main thread.
++fn run_loading(
++    options: Options,
++    settings: Settings,
++    vanilla_root: PathBuf,
++    pack_error: Option<String>,
++    started: Instant,
++) -> Result<()> {
++    let loading = new_loading(options, settings, vanilla_root, pack_error, started)?;
+     let mut app = App::Loading(Box::new(loading));
+     let result = EventLoop::new()?.run_app(&mut app);
+     narrator::stop();
+@@ -23184,15 +23227,7 @@ fn run_loading(
+ 
+ pub use launch_api::{UsageError, exit_code};
+ 
+-pub fn run_with() -> Result<()> {
+-    let Some(mut options) = Options::read()? else {
+-        return Ok(());
+-    };
+-    if options.execution_role == execution_role::ExecutionRole::DedicatedServer
+-        && !dedicated::preflight(&mut options)?
+-    {
+-        return Ok(());
+-    }
++fn install_game_hooks() {
+     // The packets the server sends its players reach the mods that ask (native_packets.rs).
+     let _ = horizon_client::lan::conn::SERVER_PACKET.set(Game::native_server_packet);
+     let _ = horizon_client::lan::conn::ENTITY_DATA_TO.set(Game::native_entity_data_to);
+@@ -23204,6 +23239,18 @@ pub fn run_with() -> Result<()> {
+     let _ = horizon_client::lan::hub::PLAYER_MOVE.set(Game::native_player_move);
+     let _ = horizon_client::lan::hub::PLAYER_TELEPORT.set(Game::native_player_teleport);
+     let _ = horizon_client::block_contact::TRAMPLE.set(Game::native_trample);
++}
++
++pub fn run_with() -> Result<()> {
++    let Some(mut options) = Options::read()? else {
++        return Ok(());
++    };
++    if options.execution_role == execution_role::ExecutionRole::DedicatedServer
++        && !dedicated::preflight(&mut options)?
++    {
++        return Ok(());
++    }
++    install_game_hooks();
+     // Before any worker starts: on Linux they go behind the server thread
+     // and the render thread.
+     horizon_threads::put_helpers_behind();
+@@ -23356,7 +23403,7 @@ pub fn run_with() -> Result<()> {
+             );
+             game.settings.save(&Game::options_path());
+         }
+-        run_event_loop(game)?;
++        run_event_loop(*game)?;
+     }
+     Ok(())
+ }
+diff --git a/crates/horizon-client/src/game/block_editor.rs b/crates/horizon-client/src/game/block_editor.rs
+index d8379c36106668cff691cf452e7cee03c5aa39e4..cfe3aa715d5f8ce18aa3fc379b59c8f1da4ea7a1 100644
+--- a/crates/horizon-client/src/game/block_editor.rs
++++ b/crates/horizon-client/src/game/block_editor.rs
+@@ -594,6 +594,36 @@ impl Game<'_> {
+         }
+     }
+ 
++    pub(super) fn mobile_block_field(
++        &mut self,
++        replacement: Option<&super::native_text_field::NativeTextField>,
++    ) -> Option<super::native_text_field::NativeTextField> {
++        let mut screen = self.block_editor.take()?;
++        let result = (|| {
++            let focus = screen.focus?;
++            if let Some(field) = replacement {
++                let edit = screen.editor.edits().get_mut(focus)?;
++                if edit.value != field.value {
++                    edit.set_value("");
++                    for c in field.value.chars() {
++                        self.block_editor_type_into(&mut screen, focus, c);
++                    }
++                }
++                let edit = screen.editor.edits().get_mut(focus)?;
++                edit.set_cursor(field.cursor, false);
++                edit.highlight = field.highlight.min(edit.value.chars().count());
++            }
++            let edit = screen.editor.edits().get(focus)?;
++            let mut result = super::native_text_field::NativeTextField::from_edit(edit);
++            result.identity = focus;
++            Some(result)
++        })();
++        self.block_editor = Some(screen);
++        if replacement.is_some() {
++            self.block_editor_after_input();
++        }
++        result
++    }
+     /// Characters typed (`type TEXT` from the agent control): into the box
+     /// with the focus.
+     pub(super) fn block_editor_type(&mut self, typed: &str) {
+diff --git a/crates/horizon-client/src/game/books.rs b/crates/horizon-client/src/game/books.rs
+index 3f67345a0faf08c593f2999f25a7df70ca7e108b..56cc497eac72a93740d732594a5c4c9c361a3d01 100644
+--- a/crates/horizon-client/src/game/books.rs
++++ b/crates/horizon-client/src/game/books.rs
+@@ -543,6 +543,20 @@ impl Game<'_> {
+         }
+         self.page_keep(before);
+     }
++    pub(super) fn mobile_book_edit(&mut self, f: impl FnOnce(&mut ui::EditBox)) {
++        if let Some(BookScreen::Edit {
++            signing: true,
++            title,
++            title_edit,
++            ..
++        }) = self.book.as_mut()
++        {
++            f(title_edit);
++            title.clone_from(&title_edit.value);
++        } else {
++            self.page_change(f);
++        }
++    }
+     /// Edit the page box, then keep it only within 14 lines and 1024 characters.
+     fn page_change(&mut self, f: impl FnOnce(&mut ui::EditBox)) -> bool {
+         let before = match self.book.as_ref() {
+diff --git a/crates/horizon-client/src/game/dialogs.rs b/crates/horizon-client/src/game/dialogs.rs
+index bd217a4ae0cf1ebb158d532a7532f57eaa4fd62c..a0f5ae1240e0ac271dad1773b6af203b3f69a285 100644
+--- a/crates/horizon-client/src/game/dialogs.rs
++++ b/crates/horizon-client/src/game/dialogs.rs
+@@ -1149,6 +1149,28 @@ impl Game<'_> {
+         Ok(())
+     }
+ 
++    pub(super) fn mobile_dialog_field(
++        &mut self,
++        replacement: Option<&super::native_text_field::NativeTextField>,
++    ) -> Option<super::native_text_field::NativeTextField> {
++        if self.dialogs.warning || self.dialogs.waiting.is_some() {
++            return None;
++        }
++        let open = self.dialogs.open.as_mut()?;
++        let focus = open.focus?;
++        let edit = open.fields.get_mut(focus)?.as_mut()?;
++        let mut result = None;
++        match edit {
++            Field::Line(edit) => result = super::native_text_field::edit_box(edit, replacement),
++            Field::Multi(edit) => edit.mobile_edit(&self.gui.atlas.font, |edit| {
++                result = super::native_text_field::edit_box(edit, replacement)
++            }),
++        }
++        if let Some(field) = result.as_mut() {
++            field.identity = focus;
++        }
++        result
++    }
+     /// Whether the open dialog has a text input.
+     pub(super) fn dialog_has_text_field(&self) -> bool {
+         self.dialogs
+diff --git a/crates/horizon-client/src/game/ime.rs b/crates/horizon-client/src/game/ime.rs
+index 3d3599e0f587ec32e5f5cdf6364b6809060e230c..c100839bd6a0655444b299fb401a0c9b5f7119af 100644
+--- a/crates/horizon-client/src/game/ime.rs
++++ b/crates/horizon-client/src/game/ime.rs
+@@ -44,7 +44,8 @@ impl Game<'_> {
+ 
+     /// Allow the input method only while a text box has focus.
+     pub(super) fn sync_ime(&mut self) {
+-        let want = self.text_field_focused();
++        // UIKit owns the only responder on iOS; winit must not open a second one.
++        let want = !cfg!(target_os = "ios") && self.text_field_focused();
+         if want != self.ime_allowed
+             && let Some(window) = &self.window
+         {
+diff --git a/crates/horizon-client/src/game/integrated.rs b/crates/horizon-client/src/game/integrated.rs
+index 6b4c261d04eb9398812f9b72aa69bb4fd5e59116..87e812f68c362a07f17e5288022bc656bec9746e 100644
+--- a/crates/horizon-client/src/game/integrated.rs
++++ b/crates/horizon-client/src/game/integrated.rs
+@@ -699,6 +699,8 @@ impl Game<'_> {
+         }
+         let mut next = Instant::now();
+         let mut was_paused = false;
++        #[cfg(target_os = "ios")]
++        let mut mobile_sample = (Instant::now(), 0_u32, Duration::ZERO, Duration::ZERO, 0_u32);
+         while !flags.stop.load(Ordering::Relaxed) {
+             self.run_tasks();
+             if self.agent.hold_server {
+@@ -717,6 +719,10 @@ impl Game<'_> {
+             }
+             was_paused = paused;
+             if paused {
++                #[cfg(target_os = "ios")]
++                {
++                    mobile_sample = (Instant::now(), 0, Duration::ZERO, Duration::ZERO, 0);
++                }
+                 // Only the connections run.
+                 self.tick_server_timed(true)?;
+             } else {
+@@ -725,6 +731,27 @@ impl Game<'_> {
+                 self.tick_server_timed(false)?;
+                 // MinecraftServer.tickServer's tick times, for /tick query.
+                 self.clock.record(started.elapsed());
++                #[cfg(target_os = "ios")]
++                {
++                    let elapsed = started.elapsed();
++                    mobile_sample.1 += 1;
++                    mobile_sample.2 += elapsed;
++                    mobile_sample.3 = mobile_sample.3.max(elapsed);
++                    mobile_sample.4 += u32::from(elapsed > Duration::from_millis(50));
++                    if mobile_sample.0.elapsed() >= Duration::from_secs(5) {
++                        log::info!(
++                            "MOBILE_SERVER ticks={} elapsed_s={:.3} tps={:.2} mean_mspt={:.2} max_mspt={:.2} overruns={} columns={}",
++                            mobile_sample.1,
++                            mobile_sample.0.elapsed().as_secs_f64(),
++                            f64::from(mobile_sample.1) / mobile_sample.0.elapsed().as_secs_f64(),
++                            mobile_sample.2.as_secs_f64() * 1000. / f64::from(mobile_sample.1),
++                            mobile_sample.3.as_secs_f64() * 1000.,
++                            mobile_sample.4,
++                            self.world.chunks.len()
++                        );
++                        mobile_sample = (Instant::now(), 0, Duration::ZERO, Duration::ZERO, 0);
++                    }
++                }
+                 self.debug_charts.log_tick(started, started.elapsed());
+                 flags.smoothed_tick_ms.store(
+                     self.debug_charts.smoothed_tick_ms.to_bits(),
+diff --git a/crates/horizon-client/src/game/lan_screen.rs b/crates/horizon-client/src/game/lan_screen.rs
+index 90e2be5e21f039e906966eb269005604a70b0ffc..e26a0b11bae3a4ebacd246e150f1c5ffb1da9c2e 100644
+--- a/crates/horizon-client/src/game/lan_screen.rs
++++ b/crates/horizon-client/src/game/lan_screen.rs
+@@ -1527,6 +1527,20 @@ impl Game<'_> {
+         }
+     }
+     /// Whether a World Options text box has focus (the port or a game rule box).
++    pub(super) fn mobile_world_edit(&mut self, f: impl FnOnce(&mut ui::EditBox)) {
++        let Some(o) = self.world_options.as_mut() else {
++            return;
++        };
++        if let Some(rules) = o.rules.as_mut().filter(|r| r.typing()) {
++            rules.edit(f);
++        } else if o.port.focused && o.view == View::Options {
++            let before = o.port.value.clone();
++            f(&mut o.port);
++            if !o.port.value.chars().all(|c| c.is_ascii_digit()) {
++                o.port.set_value(&before);
++            }
++        }
++    }
+     pub(super) fn world_options_typing(&self) -> bool {
+         self.world_options.as_ref().is_some_and(|o| {
+             o.rules.as_ref().is_some_and(|r| r.typing())
+diff --git a/crates/horizon-client/src/game/native_text_field.rs b/crates/horizon-client/src/game/native_text_field.rs
+index 2c5679eff006fb1a4987bcae507121b13359ff31..2951085fa626528be40150ee0a732086ca7db655 100644
+--- a/crates/horizon-client/src/game/native_text_field.rs
++++ b/crates/horizon-client/src/game/native_text_field.rs
+@@ -14,6 +14,7 @@ pub struct NativeTextField {
+     pub value: String,
+     pub cursor: usize,
+     pub highlight: usize,
++    pub(super) identity: usize,
+     max_length: usize,
+     multiline: bool,
+ }
+@@ -24,8 +25,9 @@ impl NativeTextField {
+     pub fn multiline(&self) -> bool {
+         self.multiline
+     }
+-    fn from_edit(edit: &EditBox) -> Self {
++    pub(super) fn from_edit(edit: &EditBox) -> Self {
+         Self {
++            identity: edit as *const _ as usize,
+             value: edit.value.clone(),
+             cursor: edit.cursor,
+             highlight: edit.highlight,
+@@ -35,6 +37,7 @@ impl NativeTextField {
+     }
+     fn from_text(edit: &TextField) -> Self {
+         Self {
++            identity: edit as *const _ as usize,
+             value: edit.value.clone(),
+             cursor: edit.cursor,
+             highlight: edit.highlight,
+@@ -42,7 +45,7 @@ impl NativeTextField {
+             multiline: false,
+         }
+     }
+-    fn apply_edit(&self, edit: &mut EditBox) {
++    pub(super) fn apply_edit(&self, edit: &mut EditBox) {
+         if self.value != edit.value {
+             edit.set_cursor(0, false);
+             edit.highlight = edit.value.chars().count();
+@@ -66,7 +69,10 @@ impl NativeTextField {
+     }
+ }
+ 
+-fn edit_box(edit: &mut EditBox, replacement: Option<&NativeTextField>) -> Option<NativeTextField> {
++pub(super) fn edit_box(
++    edit: &mut EditBox,
++    replacement: Option<&NativeTextField>,
++) -> Option<NativeTextField> {
+     if !edit.focused {
+         return None;
+     }
+@@ -79,7 +85,7 @@ fn edit_box(edit: &mut EditBox, replacement: Option<&NativeTextField>) -> Option
+ impl Game<'_> {
+     /// Specialized book/sign/dialog/rule, options and numeric editors retain
+     /// their own validators; this hook does not expose those editors yet.
+-    fn focused_native_text_field(
++    pub(super) fn focused_native_text_field(
+         &mut self,
+         replacement: Option<&NativeTextField>,
+     ) -> Option<NativeTextField> {
+@@ -108,11 +114,10 @@ impl Game<'_> {
+                 if !screen.input.focused {
+                     return None;
+                 }
+-                let result = NativeTextField::from_text(&screen.input);
+                 if let Some(field) = replacement {
+                     screen.edit_input(&measure, &commands, |edit| field.apply_text(edit, &measure));
+                 }
+-                Some(result)
++                Some(NativeTextField::from_text(&screen.input))
+             }
+             Screen::Creative if self.creative_screen.tab().search && !self.creative_ignore_text => {
+                 let result = edit_box(&mut self.creative_screen.search, replacement);
+@@ -149,6 +154,61 @@ impl Game<'_> {
+             _ => None,
+         }
+     }
++
++    pub(super) fn mobile_text_field(
++        &mut self,
++        replacement: Option<&NativeTextField>,
++    ) -> Option<NativeTextField> {
++        if self.prompt_open() && !self.dialog_open() {
++            return None;
++        }
++        let mut result = None;
++        if self.dialog_open() {
++            return self.mobile_dialog_field(replacement);
++        } else if self.screen == Screen::BlockEditor {
++            return self.mobile_block_field(replacement);
++        } else if self.sign_edit.is_some() {
++            self.sign_change(|edit| result = edit_box(edit, replacement));
++            if let (Some(field), Some(sign)) = (&mut result, &self.sign_edit) {
++                field.identity ^= sign.line;
++            }
++        } else if matches!(self.book, Some(super::books::BookScreen::Edit { .. })) {
++            self.mobile_book_edit(|edit| result = edit_box(edit, replacement));
++            if let (Some(field), Some(super::books::BookScreen::Edit { page, signing, .. })) =
++                (&mut result, &self.book)
++            {
++                field.identity ^= page * 2 + usize::from(*signing);
++            }
++        } else if self.screen == Screen::Options {
++            if self.ui.options.page() == horizon_client::options_ui::Page::Packs {
++                let measure = Measure(&self.gui.atlas.font);
++                self.ui.options.mobile_pack_edit(|edit| {
++                    if let Some(field) = replacement {
++                        field.apply_text(edit, &measure);
++                    }
++                    result = Some(NativeTextField::from_text(edit));
++                });
++            } else {
++                self.ui
++                    .options
++                    .mobile_edit(|edit| result = edit_box(edit, replacement));
++            }
++        } else if self.screen == Screen::WorldOptions {
++            self.mobile_world_edit(|edit| result = edit_box(edit, replacement));
++        } else if let Some(title) = self.title.as_mut() {
++            let id = title.focused_field().map(|(id, _, _)| id);
++            title.mobile_edit(|edit| result = edit_box(edit, replacement));
++            if let (Some(field), Some(id)) = (&mut result, id) {
++                use std::hash::{Hash, Hasher};
++                let mut hash = std::collections::hash_map::DefaultHasher::new();
++                id.hash(&mut hash);
++                field.identity = hash.finish() as usize;
++            }
++        } else {
++            result = self.focused_native_text_field(replacement);
++        }
++        result
++    }
+     // Hookable source bodies cannot contain macros; diagnostics stay here.
+     pub(super) fn report_text_input_result(result: Result<()>) {
+         if let Err(error) = result {
+@@ -528,4 +588,56 @@ mod tests {
+             ("a\u{1f600}b", 1, 3)
+         );
+     }
++    #[test]
++    fn mobile_server_edits_round_trip_unicode_selection_and_unmodified_addresses() {
++        let mut title = horizon_client::title::Title::new(
++            PathBuf::from("/nonexistent-mobile-input/saves"),
++            std::path::Path::new("/nonexistent-mobile-input"),
++        );
++        for address in [
++            "127.0.0.1",
++            "127.0.0.1:25566",
++            "mc.example.org",
++            "mc.example.org:25567",
++            "[::1]:25568",
++        ] {
++            title.mode = horizon_client::title::Mode::Multiplayer(
++                horizon_client::multiplayer::Screen::Direct {
++                    address: String::new(),
++                },
++            );
++            title.mobile_edit(|edit| {
++                let mut field = NativeTextField::from_edit(edit);
++                field.value = address.into();
++                field.cursor = address.chars().count();
++                field.highlight = field.cursor;
++                field.apply_edit(edit);
++            });
++            assert_eq!(title.focused_field().unwrap().1, address);
++            title.escape();
++            assert_eq!(title.last_server, address);
++            assert!(matches!(
++                title.mode,
++                horizon_client::title::Mode::Multiplayer(
++                    horizon_client::multiplayer::Screen::List { .. }
++                )
++            ));
++        }
++        title.mode =
++            horizon_client::title::Mode::Multiplayer(horizon_client::multiplayer::Screen::Edit {
++                index: None,
++                name: "İstanbul Şğı😀".into(),
++                address: "[::1]:25565".into(),
++                focus: 0,
++                packs: None,
++            });
++        title.mobile_edit(|edit| {
++            edit.set_cursor(8, false);
++            edit.highlight = 12;
++            edit.insert_text("Çöü");
++        });
++        assert_eq!(title.focused_field().unwrap().1, "İstanbulÇöü😀");
++        title.field_key(winit::keyboard::KeyCode::Backspace, false, false);
++        assert_eq!(title.focused_field().unwrap().1, "İstanbulÇö😀");
++    }
+ }
+diff --git a/crates/horizon-client/src/game/pad_menu.rs b/crates/horizon-client/src/game/pad_menu.rs
+index 355e7f13a763ac9d717941f1fae3705c0f306cfc..786f3f7020efe06b07a294b49427cabc9cfd8438 100644
+--- a/crates/horizon-client/src/game/pad_menu.rs
++++ b/crates/horizon-client/src/game/pad_menu.rs
+@@ -2189,7 +2189,7 @@ impl Game<'_> {
+ 
+     /// What a key of the on-screen keyboard does: the same as a typed key in
+     /// the field that has focus.
+-    fn pad_osk_output(&mut self, out: osk::Output) {
++    pub(super) fn pad_osk_output(&mut self, out: osk::Output) {
+         use osk::Output;
+         let (key, text) = match &out {
+             Output::Text(t) => (None, Some(t.as_str())),
+diff --git a/crates/horizon-client/src/game/remote.rs b/crates/horizon-client/src/game/remote.rs
+index 3af3b072f472a5be60bd4ca99bf3ba157a2975f4..c5e98b0ae1a2b4e616239b15d9ce133a58223624 100644
+--- a/crates/horizon-client/src/game/remote.rs
++++ b/crates/horizon-client/src/game/remote.rs
+@@ -1911,6 +1911,8 @@ impl Game<'_> {
+             return Ok(());
+         };
+         let Some(signature) = r.signatures.unpack(packed) else {
++            r.session
++                .diagnostic_failure("local DeleteChat handler: unknown signature reference");
+             let reason =
+                 horizon_client::text::Text::translate("multiplayer.disconnect.invalid_packet", &[]);
+             return self.leave_server(Some(reason.plain()));
+@@ -2358,7 +2360,7 @@ impl Game<'_> {
+                     key,
+                     from_server,
+                 } => {
+-                    log::info!("Horizon: disconnected: {reason}");
++                    log::info!("Horizon: disconnected (from_server={from_server}): {reason}");
+                     // ClientboundTransferPacket left a target: connect there
+                     // instead of showing the disconnect, the stored cookies
+                     // carried over (ClientCommonPacketListenerImpl.
+@@ -5199,6 +5201,9 @@ impl Game<'_> {
+                 let last_seen: Option<Vec<Signature>> =
+                     p.last_seen.iter().map(|s| r.signatures.unpack(s)).collect();
+                 let Some(last_seen) = last_seen else {
++                    r.session.diagnostic_failure(
++                        "local PlayerChat handler: unknown signature reference",
++                    );
+                     log::error!(
+                         "Message from player with ID {:032x} referenced unrecognized signature id",
+                         p.sender
+diff --git a/crates/horizon-client/src/game/sign_edit.rs b/crates/horizon-client/src/game/sign_edit.rs
+index f7906bb3cc6ef1ebc5059e83e5125f3049fe7c7d..7a759d6f2d6806613609a992f11d166166fbb29b 100644
+--- a/crates/horizon-client/src/game/sign_edit.rs
++++ b/crates/horizon-client/src/game/sign_edit.rs
+@@ -620,7 +620,7 @@ impl Game<'_> {
+         HudBatch::text_width(&self.gui.atlas, value) <= sign.max_line_width()
+     }
+     /// Edit the line, then keep the result only when it still fits.
+-    fn sign_change(&mut self, f: impl FnOnce(&mut EditBox)) {
++    pub(super) fn sign_change(&mut self, f: impl FnOnce(&mut EditBox)) {
+         let before = self
+             .sign_edit
+             .as_ref()
+diff --git a/crates/horizon-client/src/game/spectator.rs b/crates/horizon-client/src/game/spectator.rs
+index 9181c033907bde2f0d961fccc3490807e1e5c0c2..e154843ed5e1e244571d27ee4d5f9d04cef60fef 100644
+--- a/crates/horizon-client/src/game/spectator.rs
++++ b/crates/horizon-client/src/game/spectator.rs
+@@ -93,8 +93,8 @@ impl Game<'_> {
+         self.spectator_gui.on_mouse_scrolled(wheel, now);
+     }
+     /// `Hud.extractHotbar` for a spectator, and `extractAction`'s prompt.
+-    pub(super) fn draw_spectator_hotbar(&mut self, batch: &mut HudBatch) {
+-        let (w, h) = (batch.width as i32, batch.height as i32);
++    pub(super) fn draw_spectator_hotbar(&mut self, batch: &mut HudBatch, h: i32) {
++        let w = batch.width as i32;
+         let now = self.spectator_now();
+         let labels: Vec<Text> = (1..=9)
+             .map(|n| keybinds::display_name(self.settings.keys.get(&format!("key.hotbar.{n}"))))
+diff --git a/crates/horizon-client/src/game/split/players.rs b/crates/horizon-client/src/game/split/players.rs
+index ddfea2ceb5a2dd8bd4f4bf3bc297e5b13a82a35b..05325c3ad882ee66e072df3067844f8b3687519a 100644
+--- a/crates/horizon-client/src/game/split/players.rs
++++ b/crates/horizon-client/src/game/split/players.rs
+@@ -71,17 +71,6 @@ fn turned_away(game: &Game<'_>) -> Option<String> {
+     })
+ }
+ 
+-/// The `Game` `start` makes (~67 KB, by value) into a box, in a frame of its own that is gone
+-/// once it is: the copies stay out of the caller's frame, deep in the event loop.
+-#[inline(never)]
+-fn boxed(start: impl FnOnce() -> Result<Option<Game<'static>>>) -> Result<Box<Game<'static>>> {
+-    match start() {
+-        Ok(Some(game)) => Ok(Box::new(game)),
+-        Ok(None) => Err("the player's game did not start".into()),
+-        Err(e) => Err(e),
+-    }
+-}
+-
+ /// P1's server lets a splitscreen player in (#6399: everyone who plays elsewhere owns the
+ /// game): `account`, its launcher Microsoft session (whether that has expired), else an offline
+ /// profile, `unavailable` when that name is a launcher account that couldn't be handed over.
+@@ -471,22 +460,21 @@ impl Split<'_> {
+         let audio = host.audio.share(seat as u8);
+         let window = host.window.clone().ok_or("no window")?;
+         let pack = host.pack.clone();
+-        let mut guest = boxed(|| {
+-            start_game(
+-                res,
+-                pack,
+-                gui,
+-                options,
+-                None,
+-                audio,
+-                vanilla_root,
+-                Instant::now(),
+-                None,
+-                Some(settings),
+-                None,
+-                None,
+-            )
+-        })?;
++        let mut guest = start_game(
++            res,
++            pack,
++            gui,
++            options,
++            None,
++            audio,
++            vanilla_root,
++            Instant::now(),
++            None,
++            Some(settings),
++            None,
++            None,
++        )?
++        .ok_or("the player's game did not start")?;
+         guest.renderer = Some(build_renderer(
+             window.clone(),
+             true,
+diff --git a/crates/horizon-client/src/game/titles.rs b/crates/horizon-client/src/game/titles.rs
+index 2b7280831e1122e26eb0dae910e7e041ad34bf96..21a25ce5f368d6d7680f9cfac2c988b997ca657f 100644
+--- a/crates/horizon-client/src/game/titles.rs
++++ b/crates/horizon-client/src/game/titles.rs
+@@ -27,8 +27,8 @@ impl Game<'_> {
+         }
+     }
+     /// `Hud.extractOverlayMessage`: the action bar.
+-    pub(super) fn draw_overlay_message(&self, batch: &mut HudBatch) {
+-        let (w, h) = (batch.width as i32, batch.height as i32);
++    pub(super) fn draw_overlay_message(&self, batch: &mut HudBatch, h: i32) {
++        let w = batch.width as i32;
+         let partial = self.clock.fraction() as f32;
+         let background = self.settings.text_background(0.0);
+         let font = &self.gui.atlas.font;
+@@ -95,10 +95,10 @@ impl Game<'_> {
+             .tick(held, f64::from(self.settings.notification_display_time));
+     }
+     /// `Hud.extractSelectedItemName`.
+-    pub(super) fn draw_selected_name(&self, batch: &mut HudBatch, can_hurt: bool) {
++    pub(super) fn draw_selected_name(&self, batch: &mut HudBatch, h: i32, can_hurt: bool) {
+         let draws = self.tool_highlight.draw(
+             batch.width as i32,
+-            batch.height as i32,
++            h,
+             can_hurt,
+             &self.gui.atlas.font,
+             self.settings.text_background(0.0),
+diff --git a/crates/horizon-client/src/title.rs b/crates/horizon-client/src/title.rs
+index d8fede20595b5b2594323a8757fca0cfd4d34d35..9c8646135d37fabb89cc65bc059b4ed89bedfccc 100644
+--- a/crates/horizon-client/src/title.rs
++++ b/crates/horizon-client/src/title.rs
+@@ -3964,6 +3964,13 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
+         }
+         true
+     }
++    /// UIKit edits through the same caret and rule responders as ordinary typing.
++    pub fn mobile_edit(&mut self, f: impl FnOnce(&mut crate::ui::EditBox)) -> bool {
++        if self.preparing {
++            return false;
++        }
++        self.edit_field(f)
++    }
+     /// The ordinary focused caret field for native character transactions.
+     /// Preparing screens and game-rule editors retain their specialized validators.
+     pub fn edit_focused_text_field(&mut self, f: impl FnOnce(&mut crate::ui::EditBox)) -> bool {

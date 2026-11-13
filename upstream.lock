@@ -1,0 +1,9 @@
+{
+  "baseline": "18840db9146b2521dd46ad52a4559a49be180f8f",
+  "patch_base": "e9358e2892e1a348aca5e96fa9308458d7566e5d",
+  "patch_stack_digest": "3b17e3f6ad57b90ad52686af0b36462a8250b98be3375f15d30e6b09f4153a59",
+  "port_version": "0.1.0",
+  "revision": "e9358e2892e1a348aca5e96fa9308458d7566e5d",
+  "series": "verified-3b17e3f6ad57b90ad52686af0b36462a8250b98be3375f15d30e6b09f4153a59",
+  "upstream": "https://github.com/horizon-rust/horizon.git"
+}

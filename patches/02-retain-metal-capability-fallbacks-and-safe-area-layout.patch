@@ -1,0 +1,321 @@
+diff --git a/crates/horizon-client-render/src/gfx.rs b/crates/horizon-client-render/src/gfx.rs
+index 5a5e4c4e0894f70bbb4d6fda0af72e5d99f0e4c9..771999e44f57f99dd5fed315e7f7f494f904967e 100644
+--- a/crates/horizon-client-render/src/gfx.rs
++++ b/crates/horizon-client-render/src/gfx.rs
+@@ -1920,6 +1920,9 @@ fn backend_order(
+     wgpu_backend: bool,
+ ) -> Vec<wgpu::Backends> {
+     use wgpu::Backends;
++    if os == "ios" {
++        return vec![Backends::METAL];
++    }
+     if os == "macos" || wgpu_backend {
+         return vec![Backends::default()];
+     }
+@@ -2324,12 +2327,12 @@ async fn open_backend(
+         memory_hints: wgpu::MemoryHints::MemoryUsage,
+         ..Default::default()
+     };
+-    #[cfg(not(target_os = "macos"))]
++    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+     let opened = match info.backend {
+         wgpu::Backend::Vulkan => horizon_hdr::open_vulkan_device(&adapter, &desc),
+         _ => None,
+     };
+-    #[cfg(target_os = "macos")]
++    #[cfg(any(target_os = "macos", target_os = "ios"))]
+     let opened = None;
+     let opened = match opened {
+         Some(opened) => opened,
+@@ -2368,9 +2371,9 @@ async fn open_backend(
+ const NO_GPU_DRIVER: &str = "No graphics driver with Vulkan, DirectX 12 or OpenGL found: Horizon needs \
+      a GPU driver with one of them. Install the latest driver for your NVIDIA, AMD or Intel GPU and \
+      start the game again";
+-#[cfg(target_os = "macos")]
++#[cfg(any(target_os = "macos", target_os = "ios"))]
+ const NO_GPU_DRIVER: &str = "No Metal graphics device found";
+-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
++#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "ios")))]
+ const NO_GPU_DRIVER: &str = "No Vulkan or OpenGL graphics driver found: Horizon needs the Vulkan loader \
+      (libvulkan.so.1) and a Vulkan driver for your GPU (Mesa's, or NVIDIA's), or OpenGL through EGL";
+ /// Logs a step of the renderer's start, for a native crash in the graphics
+@@ -2592,6 +2595,11 @@ impl Renderer {
+         }
+         let info = adapter.get_info();
+         crate::graphics::suggest_reduced_far_detail(crate::graphics::lod_capped(&info));
++        // UIKit reports the safe area as inner_size; Metal and HUD input use
++        // the full window, including the area outside those insets.
++        #[cfg(target_os = "ios")]
++        let size = window.outer_size();
++        #[cfg(not(target_os = "ios"))]
+         let size = window.inner_size();
+         let max_side = device.limits().max_texture_dimension_2d;
+         let (config, present_modes, hdr_output) = if let Some(surface) = &surface {
+@@ -5090,6 +5098,17 @@ impl Renderer {
+             .unwrap_or_else(std::sync::PoisonError::into_inner) =
+             self.surface.take().and_then(|s| Arc::try_unwrap(s).ok());
+     }
++    /// Release both active and handoff surfaces before UIKit suspends the app.
++    /// Resume with `recreate_surface` on the same live window/device.
++    pub fn suspend_surface(&mut self) {
++        self.frame_gen.stop();
++        self.queue.wait();
++        self.surface = None;
++        *self
++            .spare_surface
++            .get_mut()
++            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
++    }
+     /// Reattach a window after surface loss or a failed renderer replacement.
+     pub fn recreate_surface(&mut self) -> Result<()> {
+         self.queue.wait();
+@@ -12939,6 +12958,10 @@ mod tests {
+             order(GraphicsApi::OpenGl, "linux", "x86_64"),
+             [Backends::GL]
+         );
++        // iOS always uses Metal, including stale desktop API preferences.
++        for api in GraphicsApi::ALL {
++            assert_eq!(order(api, "ios", "aarch64"), [Backends::METAL]);
++        }
+         // WGPU_BACKEND picks the backends itself; macOS has Metal only.
+         for api in GraphicsApi::ALL {
+             assert_eq!(
+diff --git a/crates/horizon-client-render/src/gfx/flat.rs b/crates/horizon-client-render/src/gfx/flat.rs
+index 391c6e3e478cdb30df88f3d984b47c2512172b6f..0f050b302497a4086ba5553632e6fc66372eb683 100644
+--- a/crates/horizon-client-render/src/gfx/flat.rs
++++ b/crates/horizon-client-render/src/gfx/flat.rs
+@@ -211,9 +211,17 @@ pub fn is_broken_intel_vulkan(info: &wgpu::AdapterInfo) -> bool {
+ 
+ fn supported(adapter: &wgpu::Adapter, device: &wgpu::Device) -> bool {
+     let flags = adapter.get_downlevel_capabilities().flags;
+-    let limits = device.limits();
+-    flags.contains(wgpu::DownlevelFlags::VERTEX_STORAGE | wgpu::DownlevelFlags::COMPUTE_SHADERS)
+-        && limits.max_storage_buffers_per_shader_stage >= 3
++    supported_caps(flags, &device.limits())
++}
++
++fn supported_caps(flags: wgpu::DownlevelFlags, limits: &wgpu::Limits) -> bool {
++    // Phase 2 always allocates/draws indirect argument buffers, even when the
++    // current frame has too few sections to choose flat drawing.
++    flags.contains(
++        wgpu::DownlevelFlags::VERTEX_STORAGE
++            | wgpu::DownlevelFlags::COMPUTE_SHADERS
++            | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
++    ) && limits.max_storage_buffers_per_shader_stage >= 3
+         && limits.max_storage_buffer_binding_size >= super::arena::PAGE_BYTES
+ }
+ 
+@@ -1027,6 +1035,22 @@ impl Flat {
+ 
+ #[cfg(test)]
+ mod tests {
++    #[test]
++    fn flat_draws_require_indirect_execution_even_with_storage_and_compute() {
++        let limits = wgpu::Limits {
++            max_storage_buffer_binding_size: 1 << 30,
++            ..Default::default()
++        };
++        let capable = wgpu::DownlevelFlags::VERTEX_STORAGE
++            | wgpu::DownlevelFlags::COMPUTE_SHADERS
++            | wgpu::DownlevelFlags::INDIRECT_EXECUTION;
++        assert!(super::supported_caps(capable, &limits));
++        assert!(!super::supported_caps(
++            capable - wgpu::DownlevelFlags::INDIRECT_EXECUTION,
++            &limits
++        ));
++    }
++
+     use super::*;
+ 
+     /// Draws as `render` writes them: solid (page, quads at a base vertex)
+diff --git a/crates/horizon-client-render/src/gfx/world_post.rs b/crates/horizon-client-render/src/gfx/world_post.rs
+index 5033af22f44f86bb19c41b7d24a1769511a8f724..e70bffc11c2bb345ab3c0bf03cadc0853712e731 100644
+--- a/crates/horizon-client-render/src/gfx/world_post.rs
++++ b/crates/horizon-client-render/src/gfx/world_post.rs
+@@ -647,6 +647,51 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn hotbar_uses_the_drawable_at_each_world_resolution() {
++        use crate::hud::HudBatch;
++        use crate::hud_layout::{self, GuiDraw, HotbarInputs, HotbarLayout};
++
++        let Some((device, _)) = test_device() else {
++            return;
++        };
++        let mut post = Post::new(&device, wgpu::TextureFormat::Rgba8Unorm);
++        let drawable = [2340, 1080];
++        let hud = HudBatch::new(drawable);
++        for (scale, world) in [
++            (0.5, Some([1170, 540])),
++            (0.75, Some([1755, 810])),
++            (1.0, None), // At native resolution the world draws straight to the drawable.
++        ] {
++            post.scale = scale;
++            post.prepare(&device, drawable, false);
++            assert_eq!(post.size(), world);
++            let bottom = HotbarLayout::safe_bottom(&hud, drawable[1], 81.0);
++            let layout = HotbarLayout::new(hud.width as i32, bottom);
++            let draws = hud_layout::hotbar(
++                hud.width as i32,
++                bottom,
++                &HotbarInputs {
++                    selected: 0,
++                    right_handed: true,
++                    offhand: false,
++                    slots: [Some(0.0); 9],
++                    offhand_pop: 0.0,
++                    attack: None,
++                },
++            );
++            assert!((bottom as f32 * hud.scale - 999.0).abs() < hud.scale);
++            for draw in draws {
++                if let GuiDraw::Item { slot, x, y, .. } = draw {
++                    assert_eq!(
++                        layout.slot_at([f64::from(x + 8), f64::from(y + 8)]),
++                        Some(slot as usize),
++                    );
++                }
++            }
++        }
++    }
++
+     fn test_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+         let instance = crate::gfx::test_gpu::instance();
+         let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+diff --git a/crates/horizon-client-render/src/hud_layout.rs b/crates/horizon-client-render/src/hud_layout.rs
+index 4ed9cd489e205aecff27a80411e814350fdc8053..240bdcc020f1d820cf59cfaf34943b0ee1add756 100644
+--- a/crates/horizon-client-render/src/hud_layout.rs
++++ b/crates/horizon-client-render/src/hud_layout.rs
+@@ -275,15 +275,68 @@ pub struct HotbarInputs {
+     pub attack: Option<f32>,
+ }
+ 
++#[derive(Clone, Copy, Debug)]
++pub struct HotbarLayout {
++    left: i32,
++    bottom: i32,
++}
++
++impl HotbarLayout {
++    const SLOT_WIDTH: i32 = 20;
++    const WIDTH: i32 = 9 * Self::SLOT_WIDTH + 2;
++    const HEIGHT: i32 = 22;
++
++    pub fn new(width: i32, bottom: i32) -> Self {
++        Self {
++            left: width / 2 - Self::WIDTH / 2,
++            bottom,
++        }
++    }
++
++    /// The HUD is composited over the full drawable after world upscaling.
++    pub fn safe_bottom(hud: &crate::hud::HudBatch, drawable_height: u32, inset_px: f64) -> i32 {
++        if inset_px > 0.0 {
++            ((f64::from(drawable_height) - inset_px) / f64::from(hud.scale)).floor() as i32
++        } else {
++            hud.height as i32
++        }
++    }
++
++    fn slot_left(self, slot: i32) -> i32 {
++        self.left + slot * Self::SLOT_WIDTH
++    }
++
++    pub fn slot_at(self, [x, y]: [f64; 2]) -> Option<usize> {
++        let x = x - f64::from(self.left);
++        if (0.0..f64::from(Self::WIDTH)).contains(&x)
++            && (f64::from(self.bottom - Self::HEIGHT)..f64::from(self.bottom)).contains(&y)
++        {
++            // The outer pixels of the sprite belong to the first and last slots.
++            Some((((x - 1.0) / f64::from(Self::SLOT_WIDTH)).floor() as usize).min(8))
++        } else {
++            None
++        }
++    }
++}
++
+ /// `Hud.extractItemHotbar`.
+ pub fn hotbar(w: i32, h: i32, i: &HotbarInputs) -> Vec<GuiDraw> {
+     let mut out = Vec::new();
+-    let center = w / 2;
+-    out.push(sprite("hud/hotbar", center - 91, h - 22, 182, 22));
++    let layout = HotbarLayout::new(w, h);
++    let left = layout.left;
++    let right = left + HotbarLayout::WIDTH;
++    let top = h - HotbarLayout::HEIGHT;
++    out.push(sprite(
++        "hud/hotbar",
++        left,
++        top,
++        HotbarLayout::WIDTH,
++        HotbarLayout::HEIGHT,
++    ));
+     out.push(sprite(
+         "hud/hotbar_selection",
+-        center - 91 - 1 + i.selected * 20,
+-        h - 22 - 1,
++        layout.slot_left(i.selected) - 1,
++        top - 1,
+         24,
+         23,
+     ));
+@@ -291,21 +344,9 @@ pub fn hotbar(w: i32, h: i32, i: &HotbarInputs) -> Vec<GuiDraw> {
+     let offhand_left = i.right_handed;
+     if i.offhand {
+         if offhand_left {
+-            out.push(sprite(
+-                "hud/hotbar_offhand_left",
+-                center - 91 - 29,
+-                h - 23,
+-                29,
+-                24,
+-            ));
++            out.push(sprite("hud/hotbar_offhand_left", left - 29, h - 23, 29, 24));
+         } else {
+-            out.push(sprite(
+-                "hud/hotbar_offhand_right",
+-                center + 91,
+-                h - 23,
+-                29,
+-                24,
+-            ));
++            out.push(sprite("hud/hotbar_offhand_right", right, h - 23, 29, 24));
+         }
+     }
+     let slot = |slot: u32, x: i32, y: i32, seed: i32, pop: f32, out: &mut Vec<GuiDraw>| {
+@@ -332,7 +373,7 @@ pub fn hotbar(w: i32, h: i32, i: &HotbarInputs) -> Vec<GuiDraw> {
+         if let Some(pop) = pop {
+             slot(
+                 n as u32,
+-                center - 90 + n as i32 * 20 + 2,
++                layout.slot_left(n as i32) + 3,
+                 h - 16 - 3,
+                 seed,
+                 *pop,
+@@ -342,22 +383,14 @@ pub fn hotbar(w: i32, h: i32, i: &HotbarInputs) -> Vec<GuiDraw> {
+         seed += 1;
+     }
+     if i.offhand {
+-        let x = if offhand_left {
+-            center - 91 - 26
+-        } else {
+-            center + 91 + 10
+-        };
++        let x = if offhand_left { left - 26 } else { right + 10 };
+         slot(40, x, h - 16 - 3, seed, i.offhand_pop, &mut out);
+     }
+     if let Some(scale) = i.attack
+         && scale < 1.0
+     {
+         let y = h - 20;
+-        let x = if offhand_left {
+-            center + 91 + 6
+-        } else {
+-            center - 91 - 22
+-        };
++        let x = if offhand_left { right + 6 } else { left - 22 };
+         let progress = (scale * 19.0) as i32;
+         out.push(sprite(
+             "hud/hotbar_attack_indicator_background",

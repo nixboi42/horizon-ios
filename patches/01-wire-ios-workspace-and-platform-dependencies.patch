@@ -1,0 +1,319 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 777b3d6e4af0b2fc8ebe445743ad657681812ee1..a71b4cc0586750cca898a1d5eb11ff985771c556 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1483,6 +1483,7 @@ dependencies = [
+  "horizon-client-core",
+  "horizon-dualsense",
+  "horizon-theme",
++ "horizon-threads",
+  "png",
+  "winit",
+ ]
+@@ -1666,6 +1667,27 @@ dependencies = [
+  "wgpu",
+ ]
+ 
++[[package]]
++name = "horizon-ios"
++version = "0.1.0"
++dependencies = [
++ "bytemuck",
++ "glam",
++ "horizon-assets",
++ "horizon-client",
++ "horizon-client-lib",
++ "horizon-core",
++ "horizon-threads",
++ "horizon-world",
++ "log",
++ "pollster",
++ "raw-window-handle",
++ "serde_json",
++ "sha2",
++ "wgpu",
++ "winit",
++]
++
+ [[package]]
+ name = "horizon-items"
+ version = "0.1.0"
+@@ -1914,6 +1936,8 @@ dependencies = [
+  "libc",
+  "libmimalloc-sys",
+  "mimalloc",
++ "objc2-foundation 0.2.2",
++ "objc2-ui-kit",
+  "windows-sys 0.61.2",
+ ]
+ 
+diff --git a/Cargo.toml b/Cargo.toml
+index a27a20b5ed04297d2f2c56633612495387c984ca..afe94f614d30409451c4f8e261bb433e8e85480f 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -2,6 +2,7 @@
+ exclude = ["launcher", "crates/horizon-telemetry-server", "crates/horizon-mod-registry", "third_party/wgpu-hal", "third_party/naga", "third_party/libmimalloc-sys"]
+ members = [
+     "crates/horizon-core",
++    "crates/horizon-ios",
+     "crates/horizon-dualsense",
+     "crates/horizon-narrator",
+     "crates/horizon-threads",
+diff --git a/crates/horizon-client-input/Cargo.toml b/crates/horizon-client-input/Cargo.toml
+index 82eac9cdc7ea8dfc6fb3250e0495f0c7e310409b..df344fe535d67e9ee7638ce576084455e3cd4404 100644
+--- a/crates/horizon-client-input/Cargo.toml
++++ b/crates/horizon-client-input/Cargo.toml
+@@ -12,10 +12,15 @@ winit = "0.30.13"
+ # The window icon.
+ horizon-theme = { path = "../horizon-theme" }
+ png = "0.18"
+-arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
+ # The DualSense's trigger effects (the `controllers` feature).
+ horizon-dualsense = { path = "../horizon-dualsense", optional = true }
+ 
++[target.'cfg(not(target_os = "ios"))'.dependencies]
++arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
++
++[target.'cfg(target_os = "ios")'.dependencies]
++horizon-threads = { path = "../horizon-threads" }
++
+ [features]
+ controllers = ["dep:horizon-dualsense"]
+ 
+diff --git a/crates/horizon-client-input/src/clipboard.rs b/crates/horizon-client-input/src/clipboard.rs
+index eaf2a2274f8345bc93907dc3801350d9b296d2ab..e90c2f06e5d71f42d60c20442c3c43917328e8fd 100644
+--- a/crates/horizon-client-input/src/clipboard.rs
++++ b/crates/horizon-client-input/src/clipboard.rs
+@@ -125,6 +125,7 @@ pub trait Clipboard {
+ /// game can still be pasted in the game.
+ #[derive(Default)]
+ pub struct SystemClipboard {
++    #[cfg(not(target_os = "ios"))]
+     system: Option<arboard::Clipboard>,
+     /// The text Horizon last copied (`horizon-ctl status`).
+     copied: Option<String>,
+@@ -135,6 +136,7 @@ impl SystemClipboard {
+     pub fn copied(&self) -> Option<&str> {
+         self.copied.as_deref()
+     }
++    #[cfg(not(target_os = "ios"))]
+     fn system(&mut self) -> Option<&mut arboard::Clipboard> {
+         if self.system.is_none() {
+             self.system = arboard::Clipboard::new().ok();
+@@ -143,6 +145,7 @@ impl SystemClipboard {
+     }
+ }
+ 
++#[cfg(not(target_os = "ios"))]
+ impl Clipboard for SystemClipboard {
+     fn get(&mut self) -> String {
+         let Some(system) = self.system() else {
+@@ -171,6 +174,22 @@ impl Clipboard for SystemClipboard {
+     }
+ }
+ 
++// UIKit clipboard operations stay in horizon-threads, the OS boundary; this
++// crate continues to forbid unsafe code. Off-main-thread calls cannot use UIKit.
++#[cfg(target_os = "ios")]
++impl Clipboard for SystemClipboard {
++    fn get(&mut self) -> String {
++        horizon_threads::ios_clipboard::get()
++            .unwrap_or_else(|| self.copied.clone().unwrap_or_default())
++    }
++    fn set(&mut self, text: &str) {
++        if !text.is_empty() {
++            self.copied = Some(text.to_owned());
++            horizon_threads::ios_clipboard::set(text);
++        }
++    }
++}
++
+ /// A clipboard in memory.
+ #[derive(Default, Debug)]
+ pub struct MemoryClipboard(pub String);
+diff --git a/crates/horizon-client-input/src/keybinds.rs b/crates/horizon-client-input/src/keybinds.rs
+index 63274cbb5a37098c8ab2b9fa10c7d6a5d1992fac..09cca3900b81802fbfb2ed710546f14403af06b9 100644
+--- a/crates/horizon-client-input/src/keybinds.rs
++++ b/crates/horizon-client-input/src/keybinds.rs
+@@ -300,6 +300,7 @@ pub use horizon_client_core::key_display::display_name;
+ /// Q key shows A.
+ pub fn learn_layout(event: &winit::event::KeyEvent) {
+     use winit::keyboard::{Key, PhysicalKey};
++    #[cfg(not(target_os = "ios"))]
+     use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+     let PhysicalKey::Code(code) = event.physical_key else {
+         return;
+@@ -308,7 +309,17 @@ pub fn learn_layout(event: &winit::event::KeyEvent) {
+         return;
+     };
+     let learn = horizon_client_core::key_display::learn_layout;
+-    match event.key_without_modifiers() {
++    #[cfg(not(target_os = "ios"))]
++    let key = event.key_without_modifiers();
++    // UIKit exposes logical text but no unmodified text. Letter labels are
++    // case-normalized by learn_layout; leave symbol labels at their defaults
++    // rather than learning a shifted symbol as the base key.
++    #[cfg(target_os = "ios")]
++    let key = match &event.logical_key {
++        Key::Character(text) if text.chars().all(char::is_alphabetic) => event.logical_key.clone(),
++        _ => return,
++    };
++    match key {
+         Key::Character(text) => learn(name, &text),
+         Key::Dead(Some(c)) => learn(name, c.encode_utf8(&mut [0; 4])),
+         _ => {}
+diff --git a/crates/horizon-client-lib/Cargo.toml b/crates/horizon-client-lib/Cargo.toml
+index 33e23bbd18314a4c53b33653320844d6d5251ead..0eee19ec1b40d66c7559d9dab846f7a9a5472b69 100644
+--- a/crates/horizon-client-lib/Cargo.toml
++++ b/crates/horizon-client-lib/Cargo.toml
+@@ -107,7 +107,7 @@ objc2 = "0.6"
+ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSWindow", "NSScreen"] }
+ objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSString"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+ # OpenGL (WGL on Windows, EGL on Linux), the last fallback, for GPUs with no Vulkan or
+ # DirectX 12 driver (`graphicsApi`, graphics.rs).
+ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
+diff --git a/crates/horizon-client-render/Cargo.toml b/crates/horizon-client-render/Cargo.toml
+index 2e6145924535d49846013d665be8006aee12b915..3a236e91585e7e8a6d3aac7fc86fa3235bc59079 100644
+--- a/crates/horizon-client-render/Cargo.toml
++++ b/crates/horizon-client-render/Cargo.toml
+@@ -66,7 +66,7 @@ rustix = { version = "1", default-features = false, features = ["std", "time"] }
+ [target.'cfg(windows)'.dependencies]
+ wgpu = { version = "30.0.1", default-features = false, features = ["dx12"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
+ 
+ [features]
+diff --git a/crates/horizon-client/Cargo.toml b/crates/horizon-client/Cargo.toml
+index 3a88710def91d1d6335f042a8ee2b84a875ae972..c57141110006131ff75bbf0f2cca8d4e117060b4 100644
+--- a/crates/horizon-client/Cargo.toml
++++ b/crates/horizon-client/Cargo.toml
+@@ -102,7 +102,7 @@ objc2 = "0.6"
+ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSWindow", "NSScreen"] }
+ objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSString"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+ # OpenGL (WGL on Windows, EGL on Linux), the last fallback, for GPUs with no Vulkan or
+ # DirectX 12 driver (`graphicsApi`, graphics.rs).
+ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
+diff --git a/crates/horizon-hdr/Cargo.toml b/crates/horizon-hdr/Cargo.toml
+index bd16669b020a256a275cd5d31769caa0974ba1a5..085c44586fd0f68bc5594396011ccb84f106ce48 100644
+--- a/crates/horizon-hdr/Cargo.toml
++++ b/crates/horizon-hdr/Cargo.toml
+@@ -9,7 +9,7 @@ description = "HDR metadata for the swapchain: the Vulkan calls the crates that
+ [dependencies]
+ wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+ # The version wgpu-hal already uses.
+ ash = { version = "0.38", default-features = false }
+ 
+diff --git a/crates/horizon-hdr/src/lib.rs b/crates/horizon-hdr/src/lib.rs
+index 4f7d737692eef53e552178d20119a7d4718f8f09..2f571129ed549919299ef84defb84dbadd090ffa 100644
+--- a/crates/horizon-hdr/src/lib.rs
++++ b/crates/horizon-hdr/src/lib.rs
+@@ -9,7 +9,7 @@ pub mod wayland;
+ /// Opens a Vulkan device with `VK_EXT_hdr_metadata` too, when the GPU offers
+ /// it, so [`set_metadata`] can tell the compositor the real peak brightness.
+ /// `None` leaves opening to wgpu.
+-#[cfg(not(target_os = "macos"))]
++#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+ pub fn open_vulkan_device(
+     adapter: &wgpu::Adapter,
+     desc: &wgpu::DeviceDescriptor<'_>,
+@@ -57,7 +57,7 @@ pub fn set_metadata(
+     peak: f32,
+     black: f32,
+ ) {
+-    #[cfg(not(target_os = "macos"))]
++    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+     {
+         use wgpu::hal::api::Vulkan;
+         // Safety: read-only access to handles wgpu keeps alive while these guards live.
+@@ -94,6 +94,6 @@ pub fn set_metadata(
+         // Safety: a live swapchain of this device, one metadata entry for it.
+         unsafe { loader.set_hdr_metadata(&[swapchain], &[metadata]) };
+     }
+-    #[cfg(target_os = "macos")]
++    #[cfg(any(target_os = "macos", target_os = "ios"))]
+     let _ = (device, surface, paper_white, peak, black);
+ }
+diff --git a/crates/horizon-threads/Cargo.toml b/crates/horizon-threads/Cargo.toml
+index fc2356f39b588fef4072fe1d80aa3ca7ed4c7126..5f0268a8874faf2f6bd9e722939de320963aac42 100644
+--- a/crates/horizon-threads/Cargo.toml
++++ b/crates/horizon-threads/Cargo.toml
+@@ -16,6 +16,10 @@ libc = "0.2"
+ [target.'cfg(windows)'.dependencies]
+ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Console", "Win32_System_IO", "Win32_System_ProcessStatus", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_WindowsAndMessaging"] }
+ 
++[target.'cfg(target_os = "ios")'.dependencies]
++objc2-ui-kit = { version = "0.2.2", default-features = false, features = ["std", "UIPasteboard"] }
++objc2-foundation = { version = "0.2.2", default-features = false, features = ["std", "NSString", "NSThread"] }
++
+ [features]
+ # Counts live heap bytes by startup step and thread (`CensusAllocator`); for measuring only.
+ alloc-census = []
+diff --git a/crates/horizon-threads/src/lib.rs b/crates/horizon-threads/src/lib.rs
+index e6f01369b8128268a252db4b326a7f6e1b7c2173..b13e13c8562170b54a43019b7709a19dab83776e 100644
+--- a/crates/horizon-threads/src/lib.rs
++++ b/crates/horizon-threads/src/lib.rs
+@@ -5,6 +5,8 @@
+ #[cfg(target_os = "windows")]
+ pub mod boot_paint;
+ pub mod heap_census;
++#[cfg(target_os = "ios")]
++pub mod ios_clipboard;
+ pub mod jobs;
+ pub mod process_memory;
+ 
+diff --git a/crates/horizon-threads/src/process_memory.rs b/crates/horizon-threads/src/process_memory.rs
+index fe2cc65edb268f4cc524a7ef5cbdd0e963dedab1..276a17cf790ff4d5b1d19e03ddaad8dd43cf0f25 100644
+--- a/crates/horizon-threads/src/process_memory.rs
++++ b/crates/horizon-threads/src/process_memory.rs
+@@ -63,7 +63,7 @@ pub fn resident_bytes() -> Option<u64> {
+ }
+ 
+ /// The memory this process holds in RAM, in bytes.
+-#[cfg(target_vendor = "apple")]
++#[cfg(all(target_vendor = "apple", not(target_os = "ios")))]
+ pub fn resident_bytes() -> Option<u64> {
+     let size = std::mem::size_of::<libc::proc_taskinfo>() as libc::c_int;
+     // SAFETY: all-zero is a valid value of this plain C struct, and the call writes at most `size`
+@@ -81,6 +81,31 @@ pub fn resident_bytes() -> Option<u64> {
+     }
+ }
+ 
++/// iOS exposes this process's resident memory through the public Mach task API;
++/// macOS's libproc (`proc_pidinfo`) is not available in the iOS SDK.
++#[cfg(target_os = "ios")]
++pub fn resident_bytes() -> Option<u64> {
++    let mut count = libc::MACH_TASK_BASIC_INFO_COUNT;
++    // mach_task_self() is a macro for this public libSystem symbol in the
++    // Apple SDK. libc currently exposes its declaration only on macOS.
++    unsafe extern "C" {
++        static mach_task_self_: libc::mach_port_t;
++    }
++    // SAFETY: the task is our own; the zero-initialized C structure has room for
++    // exactly `count` natural_t values. task_info writes only into that buffer.
++    unsafe {
++        let mut info: libc::mach_task_basic_info = std::mem::zeroed();
++        let result = libc::task_info(
++            mach_task_self_,
++            libc::MACH_TASK_BASIC_INFO,
++            (&raw mut info).cast(),
++            &mut count,
++        );
++        (result == libc::KERN_SUCCESS && count == libc::MACH_TASK_BASIC_INFO_COUNT)
++            .then_some(info.resident_size)
++    }
++}
++
+ /// The memory this process holds in RAM, in bytes: not known on this system.
+ #[cfg(not(any(
+     windows,
