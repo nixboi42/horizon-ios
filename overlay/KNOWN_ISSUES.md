@@ -1,21 +1,21 @@
-# Known issues — `v0.1.0-experimental`
+# Known issues — `v0.2.0-beta.11` (preview)
 
 This file records what is known to be missing or unreliable. Absence of an item here is not proof
 that it works; see [docs/ios-validation.md](docs/ios-validation.md) for what was actually tested.
 
 ## Release blockers for a "stable" label
 
-There are no hidden critical issues, but the following are why this release is **experimental** and
-why no App Store or universal-install claim is made.
+There are no hidden critical issues, but the following are why this release remains a **preview**
+and why no App Store or universal-install claim is made.
 
 ### Important
 
 1. **No App Store or universal IPA.** The project has no notarized, signed-for-distribution build
    and no Apple distribution identity. An unsigned IPA must be re-signed by the user. The app is
    not "ready to install" without that step.
-2. **Resources are manual.** The IPA contains no Minecraft data. Players must prepare 26.3 data on
-   a Mac and copy `HorizonResources` into the app's Documents folder. There is no in-app download
-   or Files picker import.
+2. **Resources are user-supplied.** The IPA contains no Minecraft data. Players must prepare 26.3
+   data on a Mac and import `HorizonResources` with the in-app Files picker. There is no in-app
+   download or account-linked fetch.
 3. **Online-mode multiplayer is unvalidated.** Offline-mode servers and the integrated server are
    the tested paths. Microsoft account login from iOS has not been verified. Treat online-mode
    servers as unsupported.
@@ -35,8 +35,8 @@ why no App Store or universal-install claim is made.
 
 ### Optional
 
-- No audio output (`HORIZON_NO_AUDIO=1` is set by the host); no controller support.
-- No launcher, mod browser, Realms, skins marketplace, telemetry opt-in UI or self-updater.
+- Controller support is unavailable, and audio does not continue in the background.
+- No mod browser, Realms, skins marketplace, telemetry opt-in UI or self-updater.
 - The app name, icon and first-run screen are functional, not final branding. There is no custom
   app icon yet.
 - The default first-launch render distance is 2 chunks. Raise it in Video Settings; settings persist
@@ -67,8 +67,9 @@ why no App Store or universal-install claim is made.
 
 ## Input and UI
 
-- Touch controls are an adapter over keyboard/mouse actions, not a native mobile control scheme.
-  There is no rebinding UI, gesture customisation or controller glyph set.
+- Touch controls are a Bedrock-inspired overlay over Java controls, not full native Bedrock
+  parity. Layout customization exists, but there is no controller glyph set, Bedrock touch-target
+  ring, or full vehicle-control parity.
 - The keyboard first-responder is a single shared `UITextView`; composition, paste and selection
   are tested, but third-party keyboards and hardware keyboards have not been exhaustively tested.
 - The on-screen debug labels and log lines are developer-facing and not localized beyond English
