@@ -23,3 +23,23 @@ HorizonResources/
 *.world
 *.mca
 *.mcr
+
+# Local game data, native build outputs, and credentials
+*.jar
+*.class
+*.app/
+*.dSYM/
+*.o
+*.a
+*.dylib
+com.apple.DeveloperTools/
+assets/minecraft/
+assets/realms/
+mobile-import.json
+horizon-resources.json
+horizon-data.bin
+horizon-sprites.cache
+launcher_profiles.json
+launcher_accounts.json
+.env
+.env.*

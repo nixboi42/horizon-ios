@@ -1,20 +1,15 @@
-# Horizon iOS 0.2.0 build 11
+# Horizon iOS v0.2.0 build 11
 
-Preview release for arm64 iPhone and iPad, targeting iOS and iPadOS 15.0. The unsigned IPA requires re-signing before installation. Prepare and import your own Minecraft: Java Edition 26.3 resources to play. See the [installation guide](overlay/INSTALL.md).
+Beta for arm64 iPhone and iPad, targeting iOS and iPadOS 15.0.
 
-## Highlights
+- Added a native launcher, offline profiles, isolated instances, and a shared verified resource import.
+- Added customizable touch layouts, joystick and D-pad tap-to-interact schemes, and Sprint and Crouch toggles. Hold-to-mine keeps mining active on remote servers.
+- Updated native keyboard presentation and focus handling, including the iOS 15 keyboard layout fallback.
+- Added native audio and streamed music using imported resources.
+- Improved title startup and frame pacing, with lower-memory rendering and upload budgets for constrained devices.
 
-- Native launcher with isolated game instances and a shared import for prepared resources.
-- Three touch schemes, customizable touch layouts, tap-to-interact, and hold-to-mine.
-- Sprint and Crouch toggle on tap in the tap-to-interact schemes, and tap again to turn off.
-- Native audio using imported sounds, plus improvements to startup and frame pacing.
+Download the [unsigned IPA](https://github.com/nixboi42/horizon-ios/releases/download/v0.2.0-beta.11/HorizonIOS-0.2.0-11-touch-toggles-unsigned.ipa) and [SHA256SUMS](https://github.com/nixboi42/horizon-ios/releases/download/v0.2.0-beta.11/SHA256SUMS) from the [v0.2.0-beta.11 release](https://github.com/nixboi42/horizon-ios/releases/tag/v0.2.0-beta.11). The unsigned IPA passed bundle and privacy checks. Build 11 was submitted to internal TestFlight. See the [validation record](docs/validation.md) for device coverage.
 
-## Downloads
+[Installation](docs/install.md) · [Known issues](docs/known-issues.md) · [Build record and checksum](BUILD.json) · [Rebuild instructions](docs/building.md#rebuild-the-build-11-ipa)
 
-- `HorizonIOS-0.2.0-11-touch-toggles-unsigned.ipa`
-- `SHA256SUMS`
-- [Build record](BUILD.json) and [packaging instructions](docs/build-11.md)
-
-The original build 11 IPA has SHA-256 `a6f4c69e9007826d5fef8edfa5cebd6b6dc3467b977d8e193af510ea1b4b44e5`. It passed bundle metadata and release privacy checks. The local upload log records successful submission of build 11 to TestFlight. Physical-device acceptance of build 11, online-mode multiplayer, and long-session performance remain unverified. The [device validation notes](docs/validation.md) cover earlier builds.
-
-Horizon iOS is an independent port. The release ships without Minecraft jars, game assets, or worlds.
+[Previous release · v0.1.0-alpha.1](https://github.com/nixboi42/horizon-ios/releases/tag/v0.1.0-alpha.1)
