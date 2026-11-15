@@ -1,0 +1,14 @@
+--- a/crates/horizon-client-render/src/gfx/surface_setup.rs
++++ b/crates/horizon-client-render/src/gfx/surface_setup.rs
+@@ -57,7 +57,10 @@
+         });
+     if horizon_threads::process_memory::constrained_ios() {
+         config.present_mode = wgpu::PresentMode::Fifo;
+-        config.desired_maximum_frame_latency = 1;
++        // Core Animation can retain presented images until scanout. Keep
++        // Phase 1's spare drawable; GPU submissions are bounded separately
++        // by Renderer::wait_for_ios_gpu.
++        config.desired_maximum_frame_latency = 2;
+     }
+     if log_step {
+         startup_step(format_args!(

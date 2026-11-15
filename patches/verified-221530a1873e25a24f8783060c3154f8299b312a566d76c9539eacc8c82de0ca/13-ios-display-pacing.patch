@@ -1,0 +1,36 @@
+--- a/crates/horizon-client/src/game/options.rs
++++ b/crates/horizon-client/src/game/options.rs
+@@ -730,6 +730,20 @@
+             limit
+         }
+     }
++    #[cfg(target_os = "ios")]
++    pub(super) fn display_paces(&self, limit: i32) -> bool {
++        let refresh_hz = self
++            .window
++            .as_ref()
++            .and_then(|w| w.current_monitor()?.refresh_rate_millihertz())
++            .map_or(60, |mhz| mhz.div_ceil(1000) as i32);
++        !self.options.offscreen
++            && limit >= refresh_hz
++            && self.renderer.as_ref().is_some_and(|r| {
++                r.config.present_mode == wgpu::PresentMode::Fifo
++            })
++    }
++
+     /// `Minecraft.runTick`'s frame limiter: `FramerateLimiter.limitDisplayFPS`
+     /// below 260 frames per second, sleeping then spin-waiting until the
+     /// frame's slot ends (not in scripted frame-count runs).
+@@ -738,6 +752,12 @@
+             return;
+         }
+         let limit = self.framerate_limit();
++        // FIFO already paces the window at the display refresh rate. Sleeping
++        // here too can push the next drawable past its refresh slot.
++        #[cfg(target_os = "ios")]
++        if self.display_paces(limit) {
++            return;
++        }
+         match self.settings.horizon.pacing {
+             horizon_client::graphics::Pacing::Precise => {
+                 horizon_client::window::end_frame(&mut self.limiter, limit, &mut self.frame_clock)

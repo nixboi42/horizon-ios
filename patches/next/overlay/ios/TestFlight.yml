@@ -1,0 +1,27 @@
+include:
+  - project.yml
+name: HorizonIOSTestFlight
+configs:
+  Debug: debug
+  Release: release
+  TestFlight: release
+configFiles:
+  TestFlight: Deployment.xcconfig
+targets:
+  HorizonIOS:
+    settings:
+      configs:
+        TestFlight:
+          PRODUCT_BUNDLE_IDENTIFIER: dev.horizon.ios.distribution
+          DEVELOPMENT_TEAM: B8B79VPAF5
+          EXCLUDED_SOURCE_FILE_NAMES: PreparedResources
+          HORIZON_TESTFLIGHT: YES
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: HORIZON_TESTFLIGHT
+          SKIP_INSTALL: NO
+schemes:
+  HorizonIOSTestFlight:
+    build:
+      targets:
+        HorizonIOS: [archive]
+    archive:
+      config: TestFlight

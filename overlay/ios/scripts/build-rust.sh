@@ -14,6 +14,17 @@ if ! command -v "$CARGO" >/dev/null 2>&1; then
   echo "cargo not found. Install Rust and the iOS targets; see BUILDING.md." >&2
   exit 1
 fi
+# Xcode may replace PATH but preserves HORIZON_CARGO as an absolute path.
+# Add its directory too so rustup finds the matching rustc proxy.
+case "$CARGO" in
+  */*)
+    CARGO_BIN=$(dirname "$CARGO")
+    PATH="$CARGO_BIN:$PATH"
+    export PATH
+    if [ -x "$CARGO_BIN/rustc" ]; then RUSTC="$CARGO_BIN/rustc"; export RUSTC; fi
+    ;;
+esac
+export RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
 
 case "${PLATFORM_NAME:-iphoneos}" in
   iphoneos) TARGET=aarch64-apple-ios ;;
@@ -34,12 +45,15 @@ export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target/ios-$IPHONEOS_DEPLOYME
 # Cargo's encoded form preserves flags containing spaces in checkout paths.
 export CARGO_ENCODED_RUSTFLAGS=$(printf '%s\037%s\037%s'   "--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo"   "--remap-path-prefix=$ROOT=/build/horizon-ios"   "--remap-path-prefix=$HOME=/build/user")
 PROFILE=debug
-if [ "${CONFIGURATION:-Debug}" = Release ]; then
+case "${CONFIGURATION:-Debug}" in
+Release|TestFlight)
   "$CARGO" build --locked -p horizon-ios --lib --target "$TARGET" --release
   PROFILE=release
-else
+  ;;
+*)
   "$CARGO" build --locked -p horizon-ios --lib --target "$TARGET"
-fi
+  ;;
+esac
 OUT="$ROOT/.local/ios-libs/${PLATFORM_NAME:-iphoneos}/${CONFIGURATION:-Debug}"
 mkdir -p "$OUT"
 cp "$CARGO_TARGET_DIR/$TARGET/$PROFILE/libhorizon_ios.a" "$OUT/libhorizon_ios.a"

@@ -1,0 +1,75 @@
+"diagnostic.ready" = "Horizon iOS — diagnostic scene\nPrepared resources are loaded. Select the gameplay scene to play.";
+"diagnostic.missing_resources" = "Horizon iOS — resources needed\nCopy your own prepared 26.3 HorizonResources folder into this app's Documents folder (Finder → your device → Files → Horizon iOS, or the Files app), then relaunch. See INSTALL.md in the release.";
+"diagnostic.failed" = "Horizon iOS — stopped\nPrepared resources could not be verified. Replace Documents/HorizonResources with a complete prepared copy and relaunch. Details are in the device log.";
+
+"terrain.ready" = "Horizon iOS — streaming terrain viewer (not gameplay)\nDrag to look. Left pad: move; right edge: fly up/down.";
+"flight.move" = "Move\nDrag here";
+"flight.up" = "Fly up";
+"flight.down" = "Fly down";
+"flight.sensitivity" = "Look sensitivity";
+
+"terrain.loading" = "Horizon iOS — loading terrain\nVerifying and importing prepared resources. Terrain will appear when ready.";
+
+"terrain.preparing" = "Horizon iOS — preparing terrain\nLoading models and generating the development world.";
+"terrain.uploading" = "Horizon iOS — preparing graphics\nTerrain will appear when ready.";
+
+"gameplay.loading" = "Loading Minecraft…";
+"gameplay.stopping" = "Returning to launcher…";
+"gameplay.ready" = "Playing Minecraft";
+"gameplay.menu" = "Minecraft menu";
+
+"navigation.back" = "Back / Pause";
+"navigation.chat" = "Chat";
+"keyboard.focusedField" = "Focused Horizon text field";
+"keyboard.back" = "Back";
+"launcher.subtitle" = "A Rust-powered world to explore";
+"launcher.username" = "Offline username";
+"launcher.play" = "Play";
+"launcher.settings" = "Settings";
+"launcher.done" = "Done";
+"launcher.return" = "Return to Launcher";
+"launcher.loading" = "Loading prepared resources…";
+"launcher.ready" = "Prepared resources verified and compatible";
+"launcher.resources_missing" = "Import your prepared resources folder to play.";
+"launcher.error" = "The game could not start. Check the app logs and resources.";
+"launcher.minecraft_version" = "Minecraft Java Edition %@";
+"launcher.instance_default" = "Default";
+"launcher.no_instance" = "No instance selected";
+"launcher.manage" = "Manage instances";
+"launcher.create" = "Create Instance";
+"launcher.rename" = "Rename Instance";
+"launcher.duplicate" = "Duplicate Instance";
+"launcher.delete" = "Delete Instance";
+"launcher.delete_title" = "Delete this instance?";
+"launcher.delete_message" = "This permanently removes its worlds, settings, and packs.";
+"launcher.cancel" = "Cancel";
+"launcher.save" = "Save";
+"launcher.instance_name" = "Instance name";
+"launcher.reload_instances" = "Reload Instances";
+"launcher.instances_error" = "The instance could not be opened or changed. See the app logs for details.";
+"launcher.import" = "Import Prepared Resources";
+"launcher.import_failed" = "Import failed. Choose a complete prepared resources folder and check available storage.";
+"launcher.resources_incompatible" = "These resources are incompatible with this version of Horizon.";
+"launcher.resources_invalid" = "Prepared resources are incomplete or could not be verified.";
+"launcher.resources_restart" = "Resources verified. Close and reopen Horizon to use the replacement.";
+
+"touch.options" = "Touch Controls";
+"touch.customize" = "Customize Controls";
+"touch.scheme" = "Control scheme";
+"touch.crosshair" = "Joystick & aim crosshair";
+"touch.joystickTap" = "Joystick & tap to interact";
+"touch.dpadTap" = "D-pad & tap to interact";
+"touch.sensitivity" = "Camera sensitivity";
+"touch.invert" = "Invert Y";
+"touch.deadzone" = "Joystick deadzone";
+"touch.dynamic" = "Dynamic joystick";
+"touch.size" = "Size";
+"touch.opacity" = "Opacity";
+"touch.left" = "Left-handed";
+"touch.save" = "Save";
+"touch.cancel" = "Cancel";
+"touch.reset" = "Reset";
+"touch.resetAll" = "Reset All";
+"touch.saveFailed" = "Could not save touch controls";
+"touch.ok" = "OK";
+"touch.pause" = "Pause";

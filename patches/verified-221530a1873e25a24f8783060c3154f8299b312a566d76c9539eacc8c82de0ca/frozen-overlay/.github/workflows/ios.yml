@@ -1,0 +1,97 @@
+name: ios
+# Compile and package checks for the native iOS host. No Minecraft data is
+# downloaded, prepared or uploaded: resource-dependent gameplay tests stay on a
+# developer's own machine and devices.
+on:
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'crates/horizon-ios/**'
+      - 'crates/horizon-client/src/game/mobile*.rs'
+      - 'crates/horizon-threads/src/ios_clipboard.rs'
+      - 'crates/horizon-client-input/**'
+      - 'crates/horizon-client-render/**'
+      - 'tools/ios_*.py'
+      - 'tools/ios_terrain_fixture.rs'
+      - 'tests/test_ios_*.py'
+      - 'docs/ios-*.md'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/ios.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'crates/horizon-ios/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust checks
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Host tests for the iOS host crate
+        run: cargo test --locked -p horizon-ios --lib
+      - name: Clippy (host)
+        run: cargo clippy --locked -p horizon-ios --all-targets -- -D warnings
+      - name: Clippy (iOS device target)
+        run: cargo clippy --locked -p horizon-ios --lib --target aarch64-apple-ios -- -D warnings
+      - name: Python release checks
+        run: |
+          python3 -m unittest discover -s tests -p 'test_ios_*.py'
+          python3 tools/check_public_tree.py
+          python3 ios/scripts/check_release.py
+
+  simulator:
+    name: Xcode simulator Release build
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Toolchain versions
+        run: xcodebuild -version && xcrun --sdk iphonesimulator --show-sdk-version
+      - name: Build simulator app
+        env:
+          HORIZON_DERIVED_DATA: ${{ github.workspace }}/build/ios-sim
+        run: ./ios/scripts/build-app.sh --platform simulator --configuration Release
+      - name: Verify bundle
+        run: |
+          APP=build/ios-sim/Build/Products/Release-iphonesimulator/HorizonIOS.app
+          ./ios/scripts/verify-app.sh "$APP"
+          ./ios/scripts/check_release.py --tree "$APP"
+      - name: Package simulator build for inspection
+        run: |
+          APP=build/ios-sim/Build/Products/Release-iphonesimulator/HorizonIOS.app
+          mkdir -p build/artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$APP" build/artifacts/HorizonIOS-simulator.app.zip
+          shasum -a 256 build/artifacts/HorizonIOS-simulator.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HorizonIOS-simulator-Release
+          path: build/artifacts/HorizonIOS-simulator.app.zip
+          retention-days: 7

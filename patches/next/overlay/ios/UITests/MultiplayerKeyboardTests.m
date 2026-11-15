@@ -1,0 +1,207 @@
+#import <XCTest/XCTest.h>
+#import <UIKit/UIKit.h>
+
+static XCTWaiterResult WaitForPlay(XCUIApplication *app) {
+    NSPredicate *ready = [NSPredicate predicateWithFormat:@"exists == YES AND enabled == YES"];
+    XCTNSPredicateExpectation *expectation = [[XCTNSPredicateExpectation alloc]
+        initWithPredicate:ready object:app.buttons[@"launcher.play"]];
+    return [XCTWaiter waitForExpectations:@[expectation] timeout:120];
+}
+
+@interface MultiplayerKeyboardTests : XCTestCase
+@property(nonatomic, strong) XCUIApplication *app;
+@property(nonatomic, copy) NSString *clipboardFixture;
+@property(nonatomic) CGFloat guiWidth;
+@property(nonatomic) CGFloat guiHeight;
+@end
+@implementation MultiplayerKeyboardTests
+- (void)setUp {
+    self.continueAfterFailure = NO;
+    self.app = [[XCUIApplication alloc] init];
+    self.app.launchEnvironment = @{@"HORIZON_IOS_TEST_SESSION": [@"phase41-extra-" stringByAppendingString:NSUUID.UUID.UUIDString], @"HORIZON_NO_AUDIO": @"1"};
+    self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
+    self.clipboardFixture = [self.name containsString:@"Unicode"] ? @"İıŞşĞğÇçÖöÜü😀e\u0301" : @"[::1]:25568";
+    // Recent iOS versions deny pasteboard writes by a background test runner.
+    XCUIApplication *runner = [[XCUIApplication alloc] initWithBundleIdentifier:NSBundle.mainBundle.bundleIdentifier];
+    [runner activate];
+    UIPasteboard.generalPasteboard.string = self.clipboardFixture;
+    [self.app launch];
+    [self openTitle];
+}
+- (void)openTitle {
+    XCTAssertEqual(WaitForPlay(self.app), XCTWaiterResultCompleted);
+    [self.app.buttons[@"launcher.play"] tap];
+    XCTAssertTrue([self.app.buttons[@"navigation.back"] waitForExistenceWithTimeout:120]);
+    XCTAssertFalse(self.app.buttons[@"navigation.chat"].exists);
+    CGImageRef image = self.app.screenshot.image.CGImage;
+    CGFloat width = MAX(CGImageGetWidth(image), CGImageGetHeight(image));
+    CGFloat height = MIN(CGImageGetWidth(image), CGImageGetHeight(image));
+    CGFloat scale = floor(MIN(width / 320, height / 240));
+    self.guiWidth = ceil(width / scale); self.guiHeight = ceil(height / scale);
+}
+- (void)capture:(NSString *)name {
+    XCTAttachment *attachment = [XCTAttachment attachmentWithScreenshot:self.app.screenshot];
+    attachment.name = name; attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
+    [self addAttachment:attachment];
+}
+- (void)tapGUIX:(CGFloat)x y:(CGFloat)y {
+    [[self.app coordinateWithNormalizedOffset:CGVectorMake(x / self.guiWidth, y / self.guiHeight)] tap];
+}
+- (XCUIElement *)text {
+    XCUIElement *text = self.app.textViews[@"horizon.nativeText"];
+    XCTAssertTrue([text waitForExistenceWithTimeout:10]);
+    XCTAssertTrue(text.hittable, @"The mirrored field must be visible and touch-selectable");
+    return text;
+}
+- (void)expectText:(NSString *)value {
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"value == %@", value];
+    XCTNSPredicateExpectation *expectation = [[XCTNSPredicateExpectation alloc] initWithPredicate:predicate object:self.text];
+    XCTAssertEqual([XCTWaiter waitForExpectations:@[expectation] timeout:5], XCTWaiterResultCompleted);
+}
+- (XCUIElement *)editMenu:(NSString *)title {
+    XCUIElement *item = self.app.menuItems[title];
+    if ([item waitForExistenceWithTimeout:2]) { return item; }
+    item = self.app.buttons[title];
+    XCTAssertTrue([item waitForExistenceWithTimeout:3]);
+    return item;
+}
+- (void)paste:(NSString *)value openMenu:(BOOL)openMenu {
+    XCTAssertEqualObjects(value, self.clipboardFixture);
+    if (openMenu) {
+        [self.text pressForDuration:1.2];
+        [[self editMenu:@"Paste"] tap];
+    } else {
+        // Keep the app active and preserve the existing selection.
+        [self.text typeKey:@"v" modifierFlags:XCUIKeyModifierCommand];
+    }
+    XCUIApplication *springboard = [[XCUIApplication alloc] initWithBundleIdentifier:@"com.apple.springboard"];
+    if (springboard.alerts.firstMatch.exists) {
+        XCUIElement *allow = [springboard.alerts.buttons matchingPredicate:[NSPredicate predicateWithFormat:@"label == 'Allow Paste' OR label == 'Einsetzen erlauben' OR label == 'Einfügen erlauben' OR label == 'Erlauben'"]].firstMatch;
+        if (allow.exists) { [allow tap]; }
+    }
+}
+- (void)expectKeyboardClosed {
+    XCTNSPredicateExpectation *reopened = [[XCTNSPredicateExpectation alloc]
+        initWithPredicate:[NSPredicate predicateWithFormat:@"exists == YES"] object:self.app.keyboards.firstMatch];
+    reopened.inverted = YES;
+    XCTAssertEqual([XCTWaiter waitForExpectations:@[reopened] timeout:1], XCTWaiterResultCompleted);
+    XCTAssertFalse(self.app.textViews[@"horizon.nativeText"].exists);
+}
+- (void)hideKeyboard {
+    [self.app.toolbars.buttons[@"Done"] tap];
+    XCTNSPredicateExpectation *closed = [[XCTNSPredicateExpectation alloc]
+        initWithPredicate:[NSPredicate predicateWithFormat:@"exists == NO"] object:self.app.keyboards.firstMatch];
+    XCTAssertEqual([XCTWaiter waitForExpectations:@[closed] timeout:10], XCTWaiterResultCompleted);
+    [self expectKeyboardClosed];
+}
+- (void)testUnicodePasteCursorDeletionAndReplacement {
+    [self tapGUIX:floor(self.guiWidth / 2) y:floor(self.guiHeight / 4) + 58]; // Singleplayer
+    [self tapGUIX:floor(self.guiWidth / 2) - 79 y:self.guiHeight - 17]; // Create New World
+    XCTAssertTrue([self.app.buttons[@"navigation.chat"] waitForExistenceWithTimeout:120]);
+    [self.app.buttons[@"navigation.chat"] tap];
+    XCTAssertTrue([self.app.keyboards.firstMatch waitForExistenceWithTimeout:10]);
+    [self paste:@"İıŞşĞğÇçÖöÜü😀e\u0301" openMenu:YES];
+    [self expectText:@"İıŞşĞğÇçÖöÜü😀e\u0301"];
+    [self.text typeKey:XCUIKeyboardKeyLeftArrow modifierFlags:XCUIKeyModifierNone];
+    [self.text typeText:XCUIKeyboardKeyDelete];
+    [self.text typeText:@"X"];
+    [self expectText:@"İıŞşĞğÇçÖöÜüXe\u0301"];
+    [self.text pressForDuration:1.2];
+    [[self editMenu:@"Select All"] tap];
+    [self.text typeText:@"replaced"];
+    [self expectText:@"replaced"];
+    [self capture:@"Unicode paste and native selection replacement"];
+    [self.app.buttons[@"navigation.back"] tap];
+    XCTAssertTrue([self.app.buttons[@"navigation.chat"] waitForExistenceWithTimeout:10]);
+}
+- (void)openMultiplayer {
+    [self tapGUIX:self.guiWidth / 2 y:floor(self.guiHeight / 4) + 82];
+    [self capture:@"Multiplayer warning or server list"];
+    // First visit's Proceed; on later visits this lies harmlessly inside the list.
+    [self tapGUIX:floor(self.guiWidth / 2) - 79 y:self.guiHeight / 2 + 59];
+}
+- (void)testAddEditDirectAddressPersistenceAndBack {
+    [self openMultiplayer];
+    CGFloat cx = floor(self.guiWidth / 2);
+    CGFloat listX = floor((self.guiWidth - 308) / 2);
+    [self tapGUIX:listX + 258 y:self.guiHeight - 42]; // Add Server.
+    [self expectKeyboardClosed]; // Add initially focuses Address.
+    [self tapGUIX:cx y:116];
+    XCTAssertTrue([self.app.keyboards.firstMatch waitForExistenceWithTimeout:10]);
+    [self hideKeyboard];
+    [self tapGUIX:cx y:76]; // Select Server Name.
+    [self.text typeText:@" Phase41"];
+    NSString *name = [self.text.value copy];
+    [self hideKeyboard];
+    [self tapGUIX:cx y:116]; // Existing Server Address field.
+    [self.text typeText:@"127.0.0.1:25566"];
+    [self expectText:@"127.0.0.1:25566"];
+    [self hideKeyboard];
+    [self tapGUIX:cx y:floor(self.guiHeight / 4) + 124]; // Existing Done saves servers.dat.
+    [self capture:@"Saved server list"];
+    [self tapGUIX:cx y:50];
+    [self tapGUIX:listX + 37 y:self.guiHeight - 18]; // Edit the saved server.
+    [self expectKeyboardClosed]; [self tapGUIX:cx y:76];
+    [self expectText:name];
+    [self hideKeyboard]; [self tapGUIX:cx y:116];
+    [self expectText:@"127.0.0.1:25566"];
+    [self.text pressForDuration:1.2]; [[self editMenu:@"Select All"] tap];
+    [self paste:@"[::1]:25568" openMenu:NO];
+    [self expectText:@"[::1]:25568"];
+    [self hideKeyboard]; [self tapGUIX:cx y:floor(self.guiHeight / 4) + 124];
+    [self tapGUIX:listX + 154 y:self.guiHeight - 42]; // Direct Connection.
+    [self expectKeyboardClosed];
+    [self tapGUIX:cx y:126]; // Explicitly tap the already-focused address.
+    XCTAssertTrue([self.app.keyboards.firstMatch waitForExistenceWithTimeout:10]);
+    if ([(NSString *)self.text.value length]) {
+        [self.text pressForDuration:1.2]; [[self editMenu:@"Select All"] tap];
+        [self.text typeText:XCUIKeyboardKeyDelete];
+    }
+    [self.text typeText:@"mc.example.invalid:25567"];
+    [self expectText:@"mc.example.invalid:25567"];
+    [self.app.buttons[@"navigation.back"] tap]; // Direct -> list, not title.
+    [self tapGUIX:cx y:50];
+    [self tapGUIX:listX + 37 y:self.guiHeight - 18];
+    [self expectKeyboardClosed]; [self tapGUIX:cx y:76];
+    [self expectText:name];
+    [self hideKeyboard]; [self tapGUIX:cx y:116];
+    [self expectText:@"[::1]:25568"];
+    [self capture:@"Saved bracketed IPv6 address reopened for editing"];
+    [self.app.buttons[@"navigation.back"] tap]; // Edit -> list.
+    [self.app.buttons[@"navigation.back"] tap]; // List -> title.
+    [self capture:@"Native Back returned to title"];
+}
+@end
+
+// Temporary device driver; removed after this investigation.
+@interface PacketJoinDeviceTests : MultiplayerKeyboardTests @end
+@implementation PacketJoinDeviceTests
+- (void)setUp {
+    self.continueAfterFailure = NO;
+    self.app = [[XCUIApplication alloc] init];
+    self.app.launchEnvironment = @{@"HORIZON_IOS_TEST_SESSION": [@"packet-join-" stringByAppendingString:NSUUID.UUID.UUIDString], @"HORIZON_PACKET_DIAGNOSTICS": @"1", @"HORIZON_NO_AUDIO": @"1"};
+    self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
+    [self.app launch];
+    [self openTitle];
+}
+- (void)testJoinServer {
+    [self openMultiplayer];
+    CGFloat cx = floor(self.guiWidth / 2);
+    CGFloat listX = floor((self.guiWidth - 308) / 2);
+    [self tapGUIX:listX + 154 y:self.guiHeight - 42];
+    [self tapGUIX:cx y:126];
+    [self.text typeText:@"192.168.1.18:25595\n"];
+    XCTAssertTrue([self.app.buttons[@"navigation.chat"] waitForExistenceWithTimeout:90]);
+    [self capture:@"iPhone joined corrected server"];
+    [self.app.buttons[@"navigation.chat"] tap];
+    [self.text typeText:@"protocol device test\n"];
+    if (self.app.buttons[@"navigation.back"].exists && self.text.exists) { [self.app.buttons[@"navigation.back"] tap]; }
+    [NSThread sleepForTimeInterval:20];
+    XCTAssertTrue(self.app.buttons[@"navigation.chat"].exists);
+    [self capture:@"iPhone remained connected"];
+    [self.app.buttons[@"navigation.back"] tap];
+    [self tapGUIX:cx y:floor((self.guiHeight - 166) * 0.25) + 156]; // Disconnect
+    [self tapGUIX:cx + 51 y:floor(self.guiHeight / 4) + 154]; // Quit Game on title
+    XCTAssertEqual(WaitForPlay(self.app), XCTWaiterResultCompleted);
+}
+@end

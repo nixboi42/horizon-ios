@@ -1,0 +1,139 @@
+diff --git a/crates/horizon-client-input/Cargo.toml b/crates/horizon-client-input/Cargo.toml
+index 4454e9413137edca23aac07ab2e73ac814525af2..8dc6db334f7295c98cb4f70776f2f62bcc6c597e 100644
+--- a/crates/horizon-client-input/Cargo.toml
++++ b/crates/horizon-client-input/Cargo.toml
+@@ -10,8 +10,13 @@ description = "The client's input layer: key bindings and their names, mouse, co
+ horizon-client-core = { path = "../horizon-client-core" }
+ winit = "0.30.13"
+ png = "0.18"
++
++[target.'cfg(not(target_os = "ios"))'.dependencies]
+ arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
+ 
++[target.'cfg(target_os = "ios")'.dependencies]
++horizon-threads = { path = "../horizon-threads" }
++
+ [dev-dependencies]
+ # The window icon test decodes Horizon's icon.
+ horizon-theme = { path = "../horizon-theme" }
+diff --git a/crates/horizon-client-input/src/clipboard.rs b/crates/horizon-client-input/src/clipboard.rs
+index eaf2a2274f8345bc93907dc3801350d9b296d2ab..e90c2f06e5d71f42d60c20442c3c43917328e8fd 100644
+--- a/crates/horizon-client-input/src/clipboard.rs
++++ b/crates/horizon-client-input/src/clipboard.rs
+@@ -125,6 +125,7 @@ pub trait Clipboard {
+ /// game can still be pasted in the game.
+ #[derive(Default)]
+ pub struct SystemClipboard {
++    #[cfg(not(target_os = "ios"))]
+     system: Option<arboard::Clipboard>,
+     /// The text Horizon last copied (`horizon-ctl status`).
+     copied: Option<String>,
+@@ -135,6 +136,7 @@ impl SystemClipboard {
+     pub fn copied(&self) -> Option<&str> {
+         self.copied.as_deref()
+     }
++    #[cfg(not(target_os = "ios"))]
+     fn system(&mut self) -> Option<&mut arboard::Clipboard> {
+         if self.system.is_none() {
+             self.system = arboard::Clipboard::new().ok();
+@@ -143,6 +145,7 @@ impl SystemClipboard {
+     }
+ }
+ 
++#[cfg(not(target_os = "ios"))]
+ impl Clipboard for SystemClipboard {
+     fn get(&mut self) -> String {
+         let Some(system) = self.system() else {
+@@ -171,6 +174,22 @@ impl Clipboard for SystemClipboard {
+     }
+ }
+ 
++// UIKit clipboard operations stay in horizon-threads, the OS boundary; this
++// crate continues to forbid unsafe code. Off-main-thread calls cannot use UIKit.
++#[cfg(target_os = "ios")]
++impl Clipboard for SystemClipboard {
++    fn get(&mut self) -> String {
++        horizon_threads::ios_clipboard::get()
++            .unwrap_or_else(|| self.copied.clone().unwrap_or_default())
++    }
++    fn set(&mut self, text: &str) {
++        if !text.is_empty() {
++            self.copied = Some(text.to_owned());
++            horizon_threads::ios_clipboard::set(text);
++        }
++    }
++}
++
+ /// A clipboard in memory.
+ #[derive(Default, Debug)]
+ pub struct MemoryClipboard(pub String);
+diff --git a/crates/horizon-client-input/src/keybinds.rs b/crates/horizon-client-input/src/keybinds.rs
+index 215d8bb1f10531a4aae449b3e5510aa7aa6f4f24..f3e1d219121ce96b929acbe0d6fb78cd4cc73225 100644
+--- a/crates/horizon-client-input/src/keybinds.rs
++++ b/crates/horizon-client-input/src/keybinds.rs
+@@ -300,6 +300,7 @@ pub use horizon_client_core::key_display::display_name;
+ /// Q key shows A.
+ pub fn learn_layout(event: &winit::event::KeyEvent) {
+     use winit::keyboard::{Key, PhysicalKey};
++    #[cfg(not(target_os = "ios"))]
+     use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+     let PhysicalKey::Code(code) = event.physical_key else {
+         return;
+@@ -308,7 +309,17 @@ pub fn learn_layout(event: &winit::event::KeyEvent) {
+         return;
+     };
+     let learn = horizon_client_core::key_display::learn_layout;
+-    match event.key_without_modifiers() {
++    #[cfg(not(target_os = "ios"))]
++    let key = event.key_without_modifiers();
++    // UIKit exposes logical text but no unmodified text. Letter labels are
++    // case-normalized by learn_layout; leave symbol labels at their defaults
++    // rather than learning a shifted symbol as the base key.
++    #[cfg(target_os = "ios")]
++    let key = match &event.logical_key {
++        Key::Character(text) if text.chars().all(char::is_alphabetic) => event.logical_key.clone(),
++        _ => return,
++    };
++    match key {
+         Key::Character(text) => learn(name, &text),
+         Key::Dead(Some(c)) => learn(name, c.encode_utf8(&mut [0; 4])),
+         _ => {}
+diff --git a/crates/horizon-threads/Cargo.toml b/crates/horizon-threads/Cargo.toml
+index 53ae29111f772a98857791cc9ba663bd7a1c35d3..38e74cef6b1f78c9cb1475528e28c171f1c5428e 100644
+--- a/crates/horizon-threads/Cargo.toml
++++ b/crates/horizon-threads/Cargo.toml
+@@ -23,6 +23,10 @@ rustc-demangle = "0.1"
+ [target.'cfg(windows)'.dependencies]
+ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Console", "Win32_System_IO", "Win32_System_ProcessStatus", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+ 
++[target.'cfg(target_os = "ios")'.dependencies]
++objc2-ui-kit = { version = "0.2.2", default-features = false, features = ["std", "UIPasteboard"] }
++objc2-foundation = { version = "0.2.2", default-features = false, features = ["std", "NSString", "NSThread"] }
++
+ [features]
+ # Set by horizon-client's `system-allocator`, which leaves nothing to count.
+ system-allocator = []
+diff --git a/crates/horizon-threads/src/allocator_stats.rs b/crates/horizon-threads/src/allocator_stats.rs
+index 16a50fafff36d95d2a1e2e0fdb6a60fda1dd4a63..c64ba77c72beca8232cbcbad285f2ece5de4dc5f 100644
+--- a/crates/horizon-threads/src/allocator_stats.rs
++++ b/crates/horizon-threads/src/allocator_stats.rs
+@@ -30,7 +30,7 @@ fn stats_json() -> Option<String> {
+         return None;
+     }
+     // SAFETY: mimalloc returns a NUL-terminated string.
+-    let text = unsafe { std::ffi::CStr::from_ptr(raw) }
++    let text = unsafe { std::ffi::CStr::from_ptr(raw.cast()) }
+         .to_string_lossy()
+         .into_owned();
+     // SAFETY: `raw` came from `mi_stats_get_json` with no buffer given.
+diff --git a/crates/horizon-threads/src/lib.rs b/crates/horizon-threads/src/lib.rs
+index 13619b2c10e6bb122d9d21a105fc59413fdd3222..3d1b91d939c67ffaeb031bea6c89d0b89e88399c 100644
+--- a/crates/horizon-threads/src/lib.rs
++++ b/crates/horizon-threads/src/lib.rs
+@@ -925,3 +925,6 @@ mod junction_tests {
+         assert!(super::mount_point_buffer(&[0; 100]).is_ok());
+     }
+ }
++
++#[cfg(target_os = "ios")]
++pub mod ios_clipboard;

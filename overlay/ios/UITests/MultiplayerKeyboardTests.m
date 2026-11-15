@@ -19,6 +19,8 @@
     [runner activate];
     UIPasteboard.generalPasteboard.string = self.clipboardFixture;
     [self.app launch];
+    XCTAssertTrue([self.app.buttons[@"launcher.play"] waitForExistenceWithTimeout:120]);
+    [self.app.buttons[@"launcher.play"] tap];
     XCTAssertTrue([self.app.buttons[@"navigation.chat"] waitForExistenceWithTimeout:120]);
     CGImageRef image = self.app.screenshot.image.CGImage;
     CGFloat width = MAX(CGImageGetWidth(image), CGImageGetHeight(image));
@@ -153,6 +155,8 @@
     self.app.launchEnvironment = @{@"HORIZON_IOS_TEST_SESSION": [@"packet-join-" stringByAppendingString:NSUUID.UUID.UUIDString], @"HORIZON_PACKET_DIAGNOSTICS": @"1", @"HORIZON_NO_AUDIO": @"1"};
     self.app.launchArguments = @[@"-AppleLanguages", @"(en)", @"-AppleLocale", @"en_US"];
     [self.app launch];
+    XCTAssertTrue([self.app.buttons[@"launcher.play"] waitForExistenceWithTimeout:120]);
+    [self.app.buttons[@"launcher.play"] tap];
     XCTAssertTrue([self.app.buttons[@"navigation.chat"] waitForExistenceWithTimeout:120]);
     CGImageRef image = self.app.screenshot.image.CGImage;
     CGFloat width = MAX(CGImageGetWidth(image), CGImageGetHeight(image));

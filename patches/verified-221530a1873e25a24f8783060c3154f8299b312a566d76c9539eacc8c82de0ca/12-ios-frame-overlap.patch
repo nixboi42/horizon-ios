@@ -1,0 +1,30 @@
+--- a/crates/horizon-client-render/src/gfx.rs
++++ b/crates/horizon-client-render/src/gfx.rs
+@@ -11917,6 +11917,15 @@
+             startup_step(format_args!("submitting the first frame"));
+             self.first_frame = FirstFrame::Drawn;
+         }
++        #[cfg(target_os = "ios")]
++        if horizon_threads::process_memory::constrained_ios() {
++            // Keep at most one submitted frame in flight, but let the CPU's
++            // next update/encoding overlap the previous frame's GPU work.
++            // Drain BEFORE submission, never between submission and present.
++            // Atlas uploads, skipped frames and memory-pressure drains retain
++            // their own waits and the bounded staging/mesh budgets.
++            self.wait_for_ios_gpu()?;
++        }
+         let submission = crate::spans::time("submit", || self.queue.submit([commands]));
+         if let Some(read) = after.or_else(|| self.after_submit()) {
+             read();
+@@ -11935,11 +11944,6 @@
+             && let Some(read) = post.submitted()
+         {
+             read();
+-        }
+-        #[cfg(target_os = "ios")]
+-        if horizon_threads::process_memory::constrained_ios() {
+-            // Drain this frame before the next update can stage more geometry.
+-            self.wait_for_ios_gpu()?;
+         }
+         let failed = checks.and_then(GpuChecks::pop);
+         if let Some((request, buffer)) = readback {

@@ -1,0 +1,34 @@
+diff --git a/crates/horizon-client-render/src/crash.rs b/crates/horizon-client-render/src/crash.rs
+index 502f064ba50eda303f1e5ce1c43933b9b476795b..7d325de3b1474ec7ceca794ca4dfcb5ed3f146f3 100644
+--- a/crates/horizon-client-render/src/crash.rs
++++ b/crates/horizon-client-render/src/crash.rs
+@@ -464,7 +464,10 @@
+     // The workspace as it was on the machine that built this binary (it need not exist here).
+     // A report names workspace files the same way on every host, whatever
+     // separator the build machine used.
++    #[cfg(not(target_os = "ios"))]
+     let manifest = env!("CARGO_MANIFEST_DIR").replace('\\', "/");
++    #[cfg(target_os = "ios")]
++    let manifest = String::from("/build/horizon-ios/crates/horizon-client-render");
+     let root = manifest
+         .strip_suffix("crates/horizon-client-render")
+         .unwrap_or(&manifest);
+diff --git a/crates/horizon-world/src/datafix/tables.rs b/crates/horizon-world/src/datafix/tables.rs
+index 6647c57335912a0a10538481445f680b5ac99932..10e4d6ad278224eac12e3404e2a2e6b082d88f67 100644
+--- a/crates/horizon-world/src/datafix/tables.rs
++++ b/crates/horizon-world/src/datafix/tables.rs
+@@ -126,9 +126,11 @@ fn path() -> PathBuf {
+         .cloned()
+         .or_else(|| std::env::var_os("HORIZON_RESOURCES").map(PathBuf::from))
+         .unwrap_or_else(|| {
+-            Path::new(env!("CARGO_MANIFEST_DIR"))
+-                .join("../../.local/horizon-client")
+-                .join(horizon_core::version::VANILLA_VERSION)
++            #[cfg(target_os = "ios")]
++            let fallback = Path::new(".local/horizon-client");
++            #[cfg(not(target_os = "ios"))]
++            let fallback = &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.local/horizon-client");
++            fallback.join(horizon_core::version::VANILLA_VERSION)
+         })
+         .join(FILE)
+ }

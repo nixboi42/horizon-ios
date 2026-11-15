@@ -1,0 +1,35 @@
+diff --git a/crates/horizon-client/src/game/remote.rs b/crates/horizon-client/src/game/remote.rs
+--- a/crates/horizon-client/src/game/remote.rs
++++ b/crates/horizon-client/src/game/remote.rs
+@@ -7753,7 +7753,13 @@
+         if start && same && running {
+             return;
+         }
+-        if !same || start {
++        // Touch holds need a fresh START after an abort, even if the
++        // finger sweeps back onto the same block.
++        #[cfg(target_os = "ios")]
++        let restart_touch = self.touch_mining_held() && !running;
++        #[cfg(not(target_os = "ios"))]
++        let restart_touch = false;
++        if !same || start || restart_touch {
+             // startDestroyBlock aborts only a break that is running; a target left by a stop that
+             // ended one is just replaced by the START below.
+             let aborted = self.remote.as_mut().and_then(|r| {
+@@ -9333,7 +9339,7 @@
+         let touch = &mut self.mobile_input;
+         let [tap_attack, tap_use] = std::mem::take(&mut touch.action_clicks);
+         let tap = touch.tap.take();
+-        let mine = touch.mine;
++        let mine_point = touch.mine;
+         let mine_started = std::mem::take(&mut touch.mine_started);
+         let [touch_attack, touch_use] = touch.action_down;
+         // Explicit buttons and physical inputs retain crosshair aim. Off-centre
+@@ -9347,6 +9353,7 @@
+         if attack || use_item || tap_attack || tap_use || touch_attack || touch_use {
+             return (attack || touch_attack, use_item || touch_use);
+         }
++        let mine = mine_point.and_then(|point| self.touch_ray(point));
+         if let Some(direction) = mine.or(tap) {
+             self.mobile_input.ray = Some(direction);
+             // A tap on an entity attacks it; a tap on a block places/uses it.

@@ -1,0 +1,506 @@
+--- a/crates/horizon-client-render/src/audio.rs
++++ b/crates/horizon-client-render/src/audio.rs
+@@ -21,6 +21,12 @@
+     sync::{Arc, Mutex},
+ };
+ 
++#[cfg(all(target_os = "ios", feature = "audio"))]
++use horizon_threads::ios_audio as ios_session;
++#[cfg(any(target_os = "ios", test))]
++#[path = "audio/ios_stream.rs"]
++mod ios_stream;
++
+ /// An OpenAL source's state.
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ enum State {
+@@ -31,6 +37,8 @@
+ }
+ /// An OpenAL source.
+ struct Channel {
++    #[cfg(target_os = "ios")]
++    stream: Option<ios_stream::Playback>,
+     samples: Option<(Arc<Vec<f32>>, u32, u16)>,
+     position: f64,
+     state: State,
+@@ -338,7 +346,7 @@
+     root: PathBuf,
+     cache: Arc<Mutex<SoundCache>>,
+     /// The decoder thread for static sounds, started with the first one.
+-    decoder: Option<std::sync::mpsc::Sender<Decode>>,
++    decoder: Option<DecodeSender>,
+     next: ChannelId,
+     live: bool,
+     /// Whose channels these are (`Channel::owner`).
+@@ -351,6 +359,10 @@
+ impl Drop for MixerBackend {
+     fn drop(&mut self) {
+         if self.owner == 0 {
++            #[cfg(target_os = "ios")]
++            if let Ok(mut m) = self.mixer.lock() {
++                m.channels.clear();
++            }
+             return;
+         }
+         self.shares
+@@ -380,7 +392,10 @@
+     bytes: usize,
+     clock: u64,
+ }
++#[cfg(not(target_os = "ios"))]
+ const CACHE_BYTES: usize = 64 << 20;
++#[cfg(target_os = "ios")]
++const CACHE_BYTES: usize = 12 << 20;
+ impl SoundCache {
+     fn get(&mut self, key: &str) -> Option<Samples> {
+         self.clock += 1;
+@@ -394,7 +409,9 @@
+         if let Some((old, _)) = self.entries.insert(key, (samples, self.clock)) {
+             self.bytes -= Self::size(&old);
+         }
+-        while self.bytes > CACHE_BYTES && self.entries.len() > 1 {
++        while (self.bytes > CACHE_BYTES || (cfg!(target_os = "ios") && self.entries.len() > 1024))
++            && self.entries.len() > 1
++        {
+             let Some(oldest) = self
+                 .entries
+                 .iter()
+@@ -414,6 +431,10 @@
+             .map_or(0, |(s, _, _)| s.len() * std::mem::size_of::<f32>())
+     }
+ }
++#[cfg(target_os = "ios")]
++type DecodeSender = std::sync::mpsc::SyncSender<Decode>;
++#[cfg(not(target_os = "ios"))]
++type DecodeSender = std::sync::mpsc::Sender<Decode>;
+ /// A static sound to decode for a channel waiting on it.
+ struct Decode {
+     key: String,
+@@ -425,8 +446,35 @@
+ /// the buffer future attaching and playing the source. A source stopped or
+ /// released meanwhile stays so.
+ fn attach(mixer: &Mutex<Mixer>, channel: ChannelId, samples: Samples, looping: bool) {
++    #[cfg(target_os = "ios")]
++    if samples.is_none() {
++        if let Ok(mut m) = mixer.lock()
++            && let Some(c) = m.channels.get_mut(&channel)
++        {
++            c.state = State::Stopped;
++        }
++        return;
++    }
+     if let Some(samples) = samples
+         && let Ok(mut m) = mixer.lock()
++        && {
++            #[cfg(target_os = "ios")]
++            {
++                let used: usize = m
++                    .channels
++                    .values()
++                    .filter_map(|c| c.samples.as_ref())
++                    .map(|(s, _, _)| s.len() * 4)
++                    .sum();
++                if used + samples.0.len() * 4 > 16 << 20 {
++                    if let Some(c) = m.channels.get_mut(&channel) {
++                        c.state = State::Stopped;
++                    }
++                    return;
++                }
++            }
++            true
++        }
+         && let Some(c) = m.channels.get_mut(&channel)
+         && c.state == State::Initial
+     {
+@@ -470,6 +518,8 @@
+ }
+ 
+ pub struct Audio {
++    #[cfg(all(target_os = "ios", feature = "audio"))]
++    ios_session: Option<ios_session::Session>,
+     _stream: Option<Stream>,
+     device_name: String,
+     pub engine: SoundEngine,
+@@ -589,6 +639,10 @@
+         if channels == 0 {
+             channels = frame_channels.min(2) as u16;
+         }
++        #[cfg(target_os = "ios")]
++        if samples.len() + decoded.samples().len() > (2 << 20) / 4 {
++            return None;
++        }
+         if frame_channels <= 2 {
+             samples.extend_from_slice(decoded.samples());
+         } else {
+@@ -675,11 +729,17 @@
+ }
+ impl Backend for MixerBackend {
+     fn create(&mut self, _streaming: bool) -> Option<ChannelId> {
++        #[cfg(target_os = "ios")]
++        if self.mixer.lock().ok()?.channels.len() >= if _streaming { 48 } else { 44 } {
++            return None;
++        }
+         self.next += 1;
+         let id = self.next;
+         self.mixer.lock().ok()?.channels.insert(
+             id,
+             Channel {
++                #[cfg(target_os = "ios")]
++                stream: None,
+                 samples: None,
+                 position: 0.0,
+                 state: State::Initial,
+@@ -760,6 +820,12 @@
+         if !looping && self.duplicate(channel, (namespace, &path)) {
+             return;
+         }
++        #[cfg(target_os = "ios")]
++        if sound.stream {
++            ios_stream::start(&self.mixer, channel, file, looping);
++            return;
++        }
++        #[cfg(not(target_os = "ios"))]
+         if sound.stream {
+             // A streamed sound loops by restarting its stream.
+             let mixer = self.mixer.clone();
+@@ -772,16 +838,32 @@
+         let key = format!("{namespace}:{path}");
+         let cached = self.cache.lock().ok().and_then(|mut c| c.get(&key));
+         if let Some(samples) = cached {
++            #[cfg(target_os = "ios")]
++            if samples.is_none() {
++                ios_stream::start(&self.mixer, channel, file, looping);
++                return;
++            }
+             attach(&self.mixer, channel, samples, looping);
+             return;
+         }
+         let decoder = self.decoder.get_or_insert_with(|| {
++            #[cfg(target_os = "ios")]
++            let (send, receive) = std::sync::mpsc::sync_channel::<Decode>(48);
++            #[cfg(not(target_os = "ios"))]
+             let (send, receive) = std::sync::mpsc::channel::<Decode>();
+             let (mixer, cache) = (self.mixer.clone(), self.cache.clone());
+             std::thread::Builder::new()
+                 .name("sound decoder".into())
+                 .spawn(move || {
+                     for job in receive {
++                        #[cfg(target_os = "ios")]
++                        if !mixer.lock().is_ok_and(|m| {
++                            m.channels
++                                .get(&job.channel)
++                                .is_some_and(|c| c.state == State::Initial)
++                        }) {
++                            continue;
++                        }
+                         // Queued twice before the first decode finished.
+                         let cached = cache.lock().ok().and_then(|mut c| c.get(&job.key));
+                         let samples = cached.unwrap_or_else(|| {
+@@ -791,23 +873,40 @@
+                             }
+                             samples
+                         });
++                        #[cfg(target_os = "ios")]
++                        if samples.is_none() {
++                            ios_stream::start(&mixer, job.channel, job.file, job.looping);
++                            continue;
++                        }
+                         attach(&mixer, job.channel, samples, job.looping);
+                     }
+                 })
+                 .expect("sound decoder thread");
+             send
+         });
+-        let _ = decoder.send(Decode {
++        let job = Decode {
+             key,
+             file,
+             channel,
+             looping,
+-        });
++        };
++        #[cfg(target_os = "ios")]
++        if decoder.try_send(job).is_err() {
++            self.with(channel, |c| c.state = State::Stopped);
++        }
++        #[cfg(not(target_os = "ios"))]
++        let _ = decoder.send(job);
+     }
+     /// `alSourceStop`: any state becomes stopped, an initial source too (a
+     /// sound still decoding then never starts).
+     fn stop(&mut self, channel: ChannelId) {
+-        self.with(channel, |c| c.state = State::Stopped);
++        self.with(channel, |c| {
++            c.state = State::Stopped;
++            #[cfg(target_os = "ios")]
++            {
++                c.stream = None;
++            }
++        });
+     }
+     fn pause(&mut self, channel: ChannelId) {
+         self.with(channel, |c| {
+@@ -1005,6 +1104,18 @@
+         let Some(c) = mixer.channels.get_mut(&id) else {
+             continue;
+         };
++        #[cfg(target_os = "ios")]
++        if let Some(stream) = &mut c.stream {
++            let out = if muffling && !c.unmuffled {
++                &mut bus[..]
++            } else {
++                &mut *data
++            };
++            if stream.mix(out, channels, step, [left, right, gain]) {
++                c.state = State::Stopped;
++            }
++            continue;
++        }
+         let Some((samples, _, source_channels)) = c.samples.clone() else {
+             continue;
+         };
+@@ -1348,13 +1459,18 @@
+ ) -> Result<cpal::Stream> {
+     let rate = config.sample_rate().0;
+     let channels = config.channels() as usize;
+-    let mut scratch = Vec::new();
++    let mut scratch = Vec::with_capacity(if cfg!(target_os = "ios") { 8192 } else { 0 });
+     let on_error = mixer.clone();
+     let stream = device.build_output_stream(
+         stream_config,
+         move |data: &mut [T], _| {
+             scratch.resize(data.len(), 0.0f32);
+-            if let Ok(mut m) = mixer.lock() {
++            let guard = if cfg!(target_os = "ios") {
++                mixer.try_lock().ok()
++            } else {
++                mixer.lock().ok()
++            };
++            if let Some(mut m) = guard {
+                 mix(&mut m, &mut scratch, channels, rate);
+             } else {
+                 scratch.fill(0.0);
+@@ -1426,7 +1542,18 @@
+         &self.device_name
+     }
+     fn with_output(root: &Path, output: bool, target_device: &str) -> Self {
+-        let registry = SoundRegistry::load(root);
++        Self::with_loaded_output(root, output, target_device, SoundRegistry::load(root))
++    }
++    #[cfg(target_os = "ios")]
++    pub fn with_device_registry(root: &Path, device: &str, registry: SoundRegistry) -> Self {
++        Self::with_loaded_output(root, true, device, registry)
++    }
++    fn with_loaded_output(
++        root: &Path,
++        output: bool,
++        target_device: &str,
++        registry: SoundRegistry,
++    ) -> Self {
+         if output && registry.is_empty() {
+             // The game then plays nothing on a working output (#1035, #1076).
+             log::warn!(
+@@ -1436,7 +1563,18 @@
+                 root.join("assets").display()
+             );
+         }
++        #[cfg(target_os = "ios")]
++        let mixer = Arc::new(Mutex::new(Mixer {
++            channels: HashMap::with_capacity(48),
++            voices: Vec::with_capacity(48),
++            cameras: Vec::with_capacity(1),
++            ..Mixer::default()
++        }));
++        #[cfg(not(target_os = "ios"))]
+         let mixer = Arc::new(Mutex::new(Mixer::default()));
++        #[cfg(all(target_os = "ios", feature = "audio"))]
++        let ios_session = (output && output_disabled(|name| std::env::var_os(name)).is_none())
++            .then(ios_session::Session::begin);
+         let opened = if output {
+             Self::open_named(mixer.clone(), target_device)
+         } else {
+@@ -1461,12 +1599,14 @@
+         // output does not need it, and listing it probes every device; the first
+         // change fills it. Elsewhere it starts with every device listed, as before.
+         #[cfg(feature = "audio")]
+-        let devices = if live && cards.is_none() {
++        let devices = if live && cards.is_none() && !cfg!(target_os = "ios") {
+             output_devices()
+         } else {
+             Vec::new()
+         };
+         Self {
++            #[cfg(all(target_os = "ios", feature = "audio"))]
++            ios_session,
+             _stream: stream,
+             device_name: target_device.to_owned(),
+             engine,
+@@ -1635,6 +1775,8 @@
+         let mut engine = SoundEngine::new(self.engine.registry.clone());
+         engine.loaded = self.backend.live;
+         Self {
++            #[cfg(all(target_os = "ios", feature = "audio"))]
++            ios_session: None,
+             _stream: None,
+             device_name: self.device_name.clone(),
+             engine,
+@@ -1802,11 +1944,47 @@
+             }
+         }
+     }
++    #[cfg(target_os = "ios")]
++    pub fn suspend_output(&mut self) {
++        self._stream = None;
++        #[cfg(feature = "audio")]
++        if self.ios_session.is_some() {
++            ios_session::suspend();
++        }
++    }
++    #[cfg(target_os = "ios")]
++    pub fn trim_cache(&mut self) {
++        if let Ok(mut cache) = self.backend.cache.lock() {
++            *cache = SoundCache::default();
++        }
++    }
+     /// `SoundManager.tick(paused)`, once per client tick.
+     pub fn tick(&mut self, paused: bool, ctx: &TickContext) {
++        #[cfg(all(target_os = "ios", feature = "audio"))]
++        if let Some(session) = &mut self.ios_session {
++            let (active, changed) = session.poll();
++            if !active {
++                self._stream = None;
++                return;
++            }
++            if changed || (self._stream.is_none() && !self.backend.live) {
++                self.backend.live = true;
++                self.reopen_output(false);
++            }
++        }
+         #[cfg(feature = "audio")]
+         {
+-            if self.should_change_device() {
++            let device_changed = if cfg!(target_os = "ios") {
++                // Route notifications are authoritative on iOS; do not spawn a
++                // desktop enumeration worker every second on an A9.
++                self.backend
++                    .mixer
++                    .lock()
++                    .is_ok_and(|mut m| std::mem::take(&mut m.device_lost))
++            } else {
++                self.should_change_device()
++            };
++            if device_changed {
+                 // SoundEngine.reload: stop every sound, open the output again.
+                 self.stop_all();
+                 self.reopen_output(false);
+@@ -1896,9 +2074,17 @@
+         self.stop_all();
+         self.engine.registry = registry;
+         self.backend.root = root.to_owned();
+-        let mut cache = self.backend.cache.lock().unwrap();
+-        cache.entries.clear();
+-        cache.bytes = 0;
++        #[cfg(target_os = "ios")]
++        {
++            self.backend.decoder = None;
++            self.backend.cache = Arc::default();
++        }
++        #[cfg(not(target_os = "ios"))]
++        {
++            let mut cache = self.backend.cache.lock().unwrap();
++            cache.entries.clear();
++            cache.bytes = 0;
++        }
+     }
+     /// Play a sound event at a world position, as `ClientLevel.playLocalSound`
+     /// (a `SimpleSoundInstance` seeded from the level random), or relative to
+@@ -2380,6 +2566,8 @@
+ 
+     fn channel(samples: Vec<f32>, linear: Option<f32>, at: [f32; 3], looping: bool) -> Channel {
+         Channel {
++            #[cfg(target_os = "ios")]
++            stream: None,
+             samples: Some((Arc::new(samples), 48_000, 1)),
+             position: 0.0,
+             state: State::Playing,
+@@ -3020,3 +3208,11 @@
+         assert!(cards_changed(Some("0 [PCH ]"), Some("0 [PCH ]\n 1 [USB ]")));
+     }
+ }
++
++#[cfg(all(target_os = "ios", feature = "audio"))]
++impl Drop for Audio {
++    fn drop(&mut self) {
++        self._stream = None;
++        self.ios_session = None;
++    }
++}
+--- a/crates/horizon-client/src/game/resource_load.rs
++++ b/crates/horizon-client/src/game/resource_load.rs
+@@ -624,11 +624,14 @@
+         (None, None)
+     };
+     #[cfg(target_os = "ios")]
++    let sounds = horizon_client::sound_events::SoundRegistry::load(&root);
++    #[cfg(target_os = "ios")]
+     if constrained && menu {
+         drop(entity_models);
+         horizon_threads::release_free_memory();
+         horizon_threads::process_memory::report_footprint("cpu_handoff_ready");
+         return Ok(Loaded {
++            sounds,
+             game_cpu,
+             entity_models: None,
+             renderer_cpu,
+@@ -641,6 +644,8 @@
+         });
+     }
+     Ok(Loaded {
++        #[cfg(target_os = "ios")]
++        sounds,
+         game_cpu,
+         entity_models,
+         renderer_cpu,
+--- a/crates/horizon-client/src/game/resource_loader.rs
++++ b/crates/horizon-client/src/game/resource_loader.rs
+@@ -194,6 +194,8 @@
+ 
+ /// The data the background loader produces for `Game::new`.
+ pub(super) struct Loaded {
++    #[cfg(target_os = "ios")]
++    pub(super) sounds: horizon_client::sound_events::SoundRegistry,
+     pub(super) game_cpu: Option<GameCpuResources>,
+     /// The one parsed `entity-models.json`, for the handoff `Game::new` does
+     /// itself on the synchronous launch.
+--- a/crates/horizon-client/src/game/loading_screen.rs
++++ b/crates/horizon-client/src/game/loading_screen.rs
+@@ -359,7 +359,18 @@
+         let audio = if !options.execution_role.is_client() {
+             Audio::silent(&options.resources)
+         } else {
+-            Audio::with_device(&options.resources, &self.settings.sound_device)
++            #[cfg(target_os = "ios")]
++            {
++                Audio::with_device_registry(
++                    &options.resources,
++                    &self.settings.sound_device,
++                    loaded.sounds,
++                )
++            }
++            #[cfg(not(target_os = "ios"))]
++            {
++                Audio::with_device(&options.resources, &self.settings.sound_device)
++            }
+         };
+         let pack_error = loaded.pack_error.or_else(|| self.pack_error.take());
+         // The game borrows its shared resources for the process's lifetime,
+--- a/crates/horizon-threads/src/lib.rs
++++ b/crates/horizon-threads/src/lib.rs
+@@ -1,6 +1,8 @@
+ //! Scheduling hints for the game's threads and its allocator: the few OS calls
+ //! that the other crates, which forbid unsafe code, can't make themselves.
+ 
++#[cfg(target_os = "ios")]
++pub mod ios_audio;
+ pub mod alloc_count;
+ pub mod allocator_stats;
+ /// The game window's boot screen, before wgpu's first frame paints over it.

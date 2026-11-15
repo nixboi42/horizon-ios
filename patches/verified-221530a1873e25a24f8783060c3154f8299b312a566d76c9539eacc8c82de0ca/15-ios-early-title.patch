@@ -1,0 +1,80 @@
+--- a/crates/horizon-client/src/game/resource_loader.rs
++++ b/crates/horizon-client/src/game/resource_loader.rs
+@@ -213,6 +213,8 @@
+ /// ready, then the core bundle with a handle to the rest worker.
+ pub(super) enum LoaderMsg {
+     Ui(UiResources, PathBuf),
++    #[cfg(target_os = "ios")]
++    UiBeforeWorld(UiResources, PathBuf, std::sync::mpsc::Sender<()>),
+     Done(std::result::Result<Loaded, String>),
+ }
+ 
+--- a/crates/horizon-client/src/game/startup_menu.rs
++++ b/crates/horizon-client/src/game/startup_menu.rs
+@@ -405,6 +405,16 @@
+                 false,
+                 &progress,
+                 &mut |gui, root| {
++                    #[cfg(target_os = "ios")]
++                    if horizon_threads::process_memory::constrained_ios() {
++                        // Decode title assets first, then finish the title's
++                        // GPU setup before the serial loader starts world data.
++                        let (ready, wait) = std::sync::mpsc::channel();
++                        if sender.send(LoaderMsg::UiBeforeWorld(gui, root.to_path_buf(), ready)).is_ok() {
++                            let _ = wait.recv();
++                        }
++                        return;
++                    }
+                     let _ = sender.send(LoaderMsg::Ui(gui, root.to_path_buf()));
+                 },
+             )
+@@ -426,6 +436,14 @@
+             loop {
+                 match self.receiver.try_recv() {
+                     Ok(LoaderMsg::Ui(gui, root)) => self.set_ui(gui, root),
++                    #[cfg(target_os = "ios")]
++                    Ok(LoaderMsg::UiBeforeWorld(gui, root, ready)) => {
++                        self.set_ui(gui, root);
++                        if let Some(renderer) = &mut self.renderer {
++                            renderer.relieve_memory_pressure();
++                        }
++                        let _ = ready.send(());
++                    }
+                     Ok(LoaderMsg::Done(result)) => {
+                         self.loaded = Some(result);
+                         self.delivered = true;
+--- a/crates/horizon-client/src/game/loading_screen.rs
++++ b/crates/horizon-client/src/game/loading_screen.rs
+@@ -79,8 +79,7 @@
+     /// the title is on the screen holds the title back by that build. Wait for
+     /// one title frame first, unless a world is waiting to open.
+     pub(super) fn ready_for_handoff(&self) -> bool {
+-        horizon_threads::process_memory::constrained_ios()
+-            || self.title_drawn
++        self.title_drawn
+             || self.menu.pending.is_some()
+             || self.ui_at.is_none_or(|at| at.elapsed() >= TITLE_FRAME_WAIT)
+     }
+@@ -209,9 +208,6 @@
+         self.title_drawn = false;
+         horizon_client::ui_theme::reset_atlas();
+         self.apply_menu_settings();
+-        if horizon_threads::process_memory::constrained_ios() {
+-            return; // UIKit is the loading screen until the CPU worker is done.
+-        }
+         let Some(window) = self.window.clone() else {
+             return;
+         };
+@@ -321,6 +317,12 @@
+         // Keep the loader's device and swap in the real textures in one step.
+         if let Some(renderer) = &mut self.renderer {
+             renderer.release_surface();
++        }
++        #[cfg(target_os = "ios")]
++        if horizon_threads::process_memory::constrained_ios()
++            && let Some(renderer) = &mut self.renderer
++        {
++            renderer.relieve_memory_pressure();
+         }
+         let renderer_at = Instant::now();
+         let renderer = startup::time("renderer.world", || {

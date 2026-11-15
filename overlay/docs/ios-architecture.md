@@ -8,8 +8,8 @@ places where the shared code needed a portable fix.
 
 | Layer | Where | Responsibility |
 | --- | --- | --- |
-| UIKit shell | `ios/App/main.m`, `ios/App/Info.plist` | Process entry, scene adoption, safe-area Back/Chat buttons, native text responder, status label, background-save task |
-| Rust host | `crates/horizon-ios/src/lib.rs` | winit event loop, sandbox paths, lifecycle transitions, resource import, scene selection, Metal surface |
+| UIKit and SwiftUI shell | `ios/App/main.m`, `ios/App/Launcher.swift`, `ios/App/Info.plist` | Scene adoption, the native launcher/settings form, safe-area Back/Chat controls, text responder, background-save task |
+| Rust host | `crates/horizon-ios/src/lib.rs` | One winit event loop/window, sandbox paths, resource import, launcher commands, gameplay session lifecycle, Metal surface |
 | Platform fixes | `crates/horizon-client`, `horizon-client-input`, `horizon-client-render`, `horizon-threads`, `horizon-protocol`, `horizon-hdr` | Small `cfg(target_os = "ios")` branches and portable fixes |
 | Gameplay | upstream `horizon-client` | Resources, world loading, integrated server, remote client, rendering, menus, saves |
 | Packaging | `ios/scripts/`, `.github/workflows/ios.yml` | Build, stage, verify, package, privacy gate |
@@ -20,7 +20,9 @@ static library plus a small fixture binary; the app target links it as `libhoriz
 ## Process and lifecycle
 
 `main.m` resolves the app's Application Support, Caches, bundle and Documents paths, then calls
-`horizon_ios_run`. The Rust side:
+`horizon_ios_run`. winit owns the UIKit process and creates its one window. `Launcher.swift` attaches
+a SwiftUI `UIHostingController` over that window for the launcher and Settings form; it does not
+create another window or render loop. The Rust side:
 
 1. Creates the sandbox layout before any worker starts and changes the process working directory
    to `Application Support/HorizonIOSDiagnostic/Gameplay` (or a validated `Tests/<session>` folder
@@ -28,7 +30,16 @@ static library plus a small fixture binary; the app target links it as `libhoriz
 2. Points `HORIZON_HOME`, launcher homes, XDG folders and cache folders into that sandbox, and
    disables self-update and audio.
 3. Starts the resource importer on a named worker, then enters `UIApplicationMain` through winit.
-4. Presents a loading scene immediately; the importer never blocks the first UIKit frame.
+4. Presents the SwiftUI launcher immediately; the importer never blocks the first UIKit frame.
+
+Play and Return are SwiftUI actions that store a command and send a winit user event. The command
+is handled on the existing event-loop thread. Play constructs the ordinary `game::mobile::Session`
+using the imported resource tree and the saved offline username. Return releases touch inputs,
+starts the game's staged world-close save, and polls it between winit waits. Once the integrated
+server has saved and stopped, the host drops the session on the event-loop thread, which releases
+the network client, workers and renderer. The window, event loop, resource import and saved worlds
+remain available for the next Play. No second `UIApplicationMain`, `EventLoop`, renderer or gameplay
+implementation is created.
 
 The app declares one `UIWindowScene` because current iOS requires scene adoption. The scene
 delegate attaches winit's real `UIWindow` through its public `UIView` handle. There is no second
@@ -52,7 +63,7 @@ only exception:
 
 - `HORIZON_IOS_SCENE=synthetic` draws a baked cube.
 - `HORIZON_IOS_SCENE=terrain` runs the historical streaming flight viewer.
-- The default (unset) path runs the full gameplay `Session`.
+- The default (unset) path presents the native launcher and waits for Play.
 
 Diagnostics are development tools, not the release experience.
 
@@ -63,6 +74,8 @@ owns per-touch state: a left movement pad, right-side look, and Jump/Break/Place
 press has an owner, releases always drain, and cancellation/focus loss releases held actions. A GUI
 touch becomes a single owned pointer so a second finger cannot release it.
 
+SwiftUI draws the launcher and a small Return to Launcher button while gameplay is active. Its game
+overlay only accepts touches in that button's area, leaving the existing touch controls reachable.
 UIKit draws the Back, Chat and native text overlay. Back invokes the current screen's own cancel
 action (`Game::pad_back` and the special sign/book/block-editor paths). The native text view mirrors
 the focused Horizon field and applies committed text and selection through the original widget's

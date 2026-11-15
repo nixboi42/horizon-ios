@@ -1,0 +1,43 @@
+--- a/crates/horizon-client/src/game/startup_menu.rs
++++ b/crates/horizon-client/src/game/startup_menu.rs
+@@ -781,6 +781,6 @@
+     fn menu_action(&mut self, event_loop: &dyn EventLoopCtl, action: Action) {
+         match action {
+-            Action::Quit => event_loop.exit(),
++            Action::Quit => mobile::quit_game(event_loop),
+             Action::Options => self.open_menu_options(Page::Main),
+             Action::Accessibility => self.open_menu_options(Page::Accessibility),
+             Action::Language => self.open_menu_options(Page::Language),
+--- a/crates/horizon-client/src/game/world_session.rs
++++ b/crates/horizon-client/src/game/world_session.rs
+@@ -24,7 +24,7 @@
+         match action {
+             // A splitscreen player's title never ends the process (P1's does).
+             Action::Quit if self.options.split_guest => {}
+-            Action::Quit => event_loop.exit(),
++            Action::Quit => mobile::quit_game(event_loop),
+             Action::Options => self.open_options(true),
+             Action::Accessibility => {
+                 self.open_options_at(true, horizon_client::options_ui::Page::Accessibility)
+--- a/crates/horizon-client/src/game/remote.rs
++++ b/crates/horizon-client/src/game/remote.rs
+@@ -1558,6 +1558,10 @@
+         if self.remote.is_some() {
+             self.native_client_disconnecting();
+         }
++        // An intentional disconnect from a joined server also returns to
++        // the main menu on iOS. Connect cancellation still goes to the list.
++        let joined_on_ios =
++            cfg!(target_os = "ios") && self.remote.as_ref().is_some_and(|r| r.joined);
+         if let Some(mut r) = self.remote.take() {
+             r.session.disconnect();
+         }
+@@ -1617,7 +1621,7 @@
+             .with_user(|| self.options.player_name());
+         title.last_server = self.settings.file.string("lastServer");
+         title.skip_multiplayer_warning = self.settings.file.bool("skipMultiplayerWarning");
+-        if single_player && reason.is_none() {
++        if (single_player || joined_on_ios) && reason.is_none() {
+             self.title = Some(title);
+             self.capture(false);
+             return Ok(());

@@ -14,6 +14,7 @@
 "terrain.uploading" = "Horizon iOS — preparing graphics\nTerrain will appear when ready.";
 
 "gameplay.loading" = "Loading single-player…";
+"gameplay.stopping" = "Returning to launcher…";
 "gameplay.ready" = "Creative single-player";
 "gameplay.menu" = "Single-player menu";
 "gameplay.move" = "Move";
@@ -28,3 +29,13 @@
 "navigation.chat" = "Chat";
 "keyboard.focusedField" = "Focused Horizon text field";
 "keyboard.back" = "Back";
+"launcher.subtitle" = "A Rust-powered world to explore";
+"launcher.username" = "Offline username";
+"launcher.play" = "Play";
+"launcher.settings" = "Settings";
+"launcher.done" = "Done";
+"launcher.return" = "Return to Launcher";
+"launcher.loading" = "Loading prepared resources…";
+"launcher.ready" = "Ready to play";
+"launcher.resources_missing" = "Add prepared game resources in Files to play.";
+"launcher.error" = "The game could not start. Check the app logs and resources.";

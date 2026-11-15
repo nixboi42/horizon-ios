@@ -1,0 +1,97 @@
+diff --git a/crates/horizon-client-lib/Cargo.toml b/crates/horizon-client-lib/Cargo.toml
+index 435cc13545bdc168595e1f9277233093d3ed4ff0..6bfca6b430388a4c6d7c65aa9cce6c5ce34ba73a 100644
+--- a/crates/horizon-client-lib/Cargo.toml
++++ b/crates/horizon-client-lib/Cargo.toml
+@@ -107,7 +107,7 @@ objc2 = "0.6"
+ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSWindow", "NSScreen"] }
+ objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSString"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+ # OpenGL (WGL on Windows, EGL on Linux), the last fallback, for GPUs with no Vulkan or
+ # DirectX 12 driver (`graphicsApi`, graphics.rs).
+ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
+diff --git a/crates/horizon-client-render/Cargo.toml b/crates/horizon-client-render/Cargo.toml
+index 687f41dde1ae60b41ac8c70b0c277fa947d5a072..57a14bab23863f42051775487011ee958797dda0 100644
+--- a/crates/horizon-client-render/Cargo.toml
++++ b/crates/horizon-client-render/Cargo.toml
+@@ -67,7 +67,7 @@ rustix = { version = "1", default-features = false, features = ["std", "time"] }
+ [target.'cfg(windows)'.dependencies]
+ wgpu = { version = "30.0.1", default-features = false, features = ["dx12"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
+ 
+ [features]
+diff --git a/crates/horizon-client/Cargo.toml b/crates/horizon-client/Cargo.toml
+index 37d24c3061e8c11b5405a75362667c0d954bea99..77b9096de9d7e89448910a8e451d6f0aa37ef08c 100644
+--- a/crates/horizon-client/Cargo.toml
++++ b/crates/horizon-client/Cargo.toml
+@@ -105,7 +105,7 @@ objc2 = "0.6"
+ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder", "NSWindow", "NSScreen"] }
+ objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSString"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(any(target_os = "macos", target_os = "ios")))'.dependencies]
+ # OpenGL (WGL on Windows, EGL on Linux), the last fallback, for GPUs with no Vulkan or
+ # DirectX 12 driver (`graphicsApi`, graphics.rs).
+ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
+diff --git a/crates/horizon-hdr/Cargo.toml b/crates/horizon-hdr/Cargo.toml
+index bd16669b020a256a275cd5d31769caa0974ba1a5..b610a8ff11b94e8805a4180007a64182f0403fde 100644
+--- a/crates/horizon-hdr/Cargo.toml
++++ b/crates/horizon-hdr/Cargo.toml
+@@ -9,7 +9,7 @@ description = "HDR metadata for the swapchain: the Vulkan calls the crates that
+ [dependencies]
+ wgpu = { version = "30.0.1", default-features = false, features = ["vulkan"] }
+ 
+-[target.'cfg(not(target_os = "macos"))'.dependencies]
++[target.'cfg(not(target_vendor = "apple"))'.dependencies]
+ # The version wgpu-hal already uses.
+ ash = { version = "0.38", default-features = false }
+ 
+diff --git a/crates/horizon-hdr/src/lib.rs b/crates/horizon-hdr/src/lib.rs
+index 4c359727c9ea2a078772aa58753c4668161c66a3..e8f5feab062c0adf9fe515ea982332535218bebc 100644
+--- a/crates/horizon-hdr/src/lib.rs
++++ b/crates/horizon-hdr/src/lib.rs
+@@ -9,7 +9,7 @@ pub mod wayland;
+ /// Opens a Vulkan device with `VK_EXT_hdr_metadata` too, when the GPU offers
+ /// it, so [`set_metadata`] can tell the compositor the real peak brightness.
+ /// `None` leaves opening to wgpu.
+-#[cfg(not(target_os = "macos"))]
++#[cfg(not(target_vendor = "apple"))]
+ pub fn open_vulkan_device(
+     adapter: &wgpu::Adapter,
+     desc: &wgpu::DeviceDescriptor<'_>,
+@@ -60,7 +60,7 @@ pub fn experimental_features() -> wgpu::ExperimentalFeatures {
+ /// content is BT.709, peaks at `peak` nits and is no darker than `black`. Needs a
+ /// device from `open_vulkan_device` and a configured surface; does nothing otherwise.
+ pub fn set_metadata(device: &wgpu::Device, surface: &wgpu::Surface<'_>, peak: f32, black: f32) {
+-    #[cfg(not(target_os = "macos"))]
++    #[cfg(not(target_vendor = "apple"))]
+     {
+         use wgpu::hal::api::Vulkan;
+         // Safety: read-only access to handles wgpu keeps alive while these guards live.
+@@ -87,11 +87,11 @@ pub fn set_metadata(device: &wgpu::Device, surface: &wgpu::Surface<'_>, peak: f3
+         // Safety: a live swapchain of this device, one metadata entry for it.
+         unsafe { loader.set_hdr_metadata(&[swapchain], &[metadata(peak, black)]) };
+     }
+-    #[cfg(target_os = "macos")]
++    #[cfg(target_vendor = "apple")]
+     let _ = (device, surface, peak, black);
+ }
+ 
+-#[cfg(not(target_os = "macos"))]
++#[cfg(not(target_vendor = "apple"))]
+ fn metadata(peak: f32, black: f32) -> ash::vk::HdrMetadataEXT<'static> {
+     let xy = |x, y| ash::vk::XYColorEXT { x, y };
+     ash::vk::HdrMetadataEXT::default()
+@@ -107,7 +107,7 @@ fn metadata(peak: f32, black: f32) -> ash::vk::HdrMetadataEXT<'static> {
+         .max_frame_average_light_level(0.0)
+ }
+ 
+-#[cfg(all(test, not(target_os = "macos")))]
++#[cfg(all(test, not(target_vendor = "apple")))]
+ mod tests {
+     #[test]
+     fn the_frame_average_is_sent_as_unknown() {

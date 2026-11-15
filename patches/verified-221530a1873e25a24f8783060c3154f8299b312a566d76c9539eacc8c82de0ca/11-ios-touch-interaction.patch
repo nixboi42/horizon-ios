@@ -1,0 +1,172 @@
+diff --git a/crates/horizon-client/src/game.rs b/crates/horizon-client/src/game.rs
+--- a/crates/horizon-client/src/game.rs
++++ b/crates/horizon-client/src/game.rs
+@@ -2998,6 +2998,8 @@
+     hotbar_presses: Vec<usize>,
+     // Drawable pixels reserved by the mobile host below the gameplay HUD.
+     mobile_hud_bottom_inset: f64,
++    #[cfg(target_os = "ios")]
++    mobile_input: mobile::Input,
+     /// `Player.entityInteractionRange` and `blockInteractionRange`, refreshed
+     /// each tick from the attribute (a server's reach modifier, creative's
+     /// +2): the pick helpers' `&self` reach.
+@@ -3363,6 +3365,10 @@
+     /// crosshair target (blocks, fluids, entities, mod raycasts) is found
+     /// along this ray, so a tracked controller can stand in for it.
+     fn aim(&self) -> Option<([f64; 3], [f64; 3])> {
++        #[cfg(target_os = "ios")]
++        if let Some(direction) = self.mobile_input.ray {
++            return Some((self.eye_position()?, direction));
++        }
+         // Minecraft.pick: from the camera entity's eyes along its view
+         // (LivingEntity.getViewYRot: the head's yaw).
+         if let Some(e) = self.camera_entity() {
+@@ -5971,7 +5977,11 @@
+             let strength = self.hand_strength.scale(0.0, self.main_hand_attack_speed());
+             // The 3D crosshair (F3) takes the 2D one's place.
+             // Hud.extractCrosshair: a spectator only sees it over something to open.
+-            if self.camera_type.first_person()
++            #[cfg(target_os = "ios")]
++            let show_crosshair = self.mobile_input.crosshair;
++            #[cfg(not(target_os = "ios"))]
++            let show_crosshair = true;
++            if show_crosshair && self.camera_type.first_person()
+                 && (!spectator || self.spectator_crosshair())
+                 && !self.debug_crosshair()
+                 && !self.overlay_holds_view()
+@@ -6221,6 +6231,10 @@
+         } else {
+             self.screen
+         };
++        #[cfg(target_os = "ios")]
++        if self.mobile_input.editing && screen == Screen::Paused {
++            return batch;
++        }
+         match screen {
+             Screen::Paused if self.pause_menu => self.draw_pause_menu(&mut batch),
+             // PauseScreen(false): only its title, at the top.
+@@ -11868,6 +11882,8 @@
+             tick_mob: None,
+             hotbar_presses: Vec::new(),
+             mobile_hud_bottom_inset: 0.0,
++            #[cfg(target_os = "ios")]
++            mobile_input: mobile::Input::default(),
+             entity_reach: 3.0,
+             block_reach: 4.5,
+             guest_use: None,
+diff --git a/crates/horizon-client/src/game/play_input.rs b/crates/horizon-client/src/game/play_input.rs
+--- a/crates/horizon-client/src/game/play_input.rs
++++ b/crates/horizon-client/src/game/play_input.rs
+@@ -481,6 +481,10 @@
+ impl Game<'_> {
+     /// The analog move vector (`[left, forward]`, -1..1) while a device moves the player.
+     pub(super) fn input_move(&self) -> Option<[f32; 2]> {
++        #[cfg(target_os = "ios")]
++        if self.mobile_input.stick != [0.; 2] {
++            return Some(self.mobile_input.stick);
++        }
+         self.pad_move()
+     }
+ 
+diff --git a/crates/horizon-client/src/game/pad.rs b/crates/horizon-client/src/game/pad.rs
+--- a/crates/horizon-client/src/game/pad.rs
++++ b/crates/horizon-client/src/game/pad.rs
+@@ -367,6 +367,10 @@
+ 
+     /// Once per loop iteration: read the pads and act on button changes.
+     pub(super) fn poll_pads(&mut self, event_loop: &dyn EventLoopCtl) {
++        #[cfg(target_os = "ios")]
++        if self.mobile_input.editing {
++            return;
++        }
+         self.pad.virtual_input = self.pad.injected != PadState::default();
+         let context = self.pad_context();
+         if let Some(old) = self.pad.context.filter(|old| *old != context) {
+diff --git a/crates/horizon-client/src/game/remote.rs b/crates/horizon-client/src/game/remote.rs
+--- a/crates/horizon-client/src/game/remote.rs
++++ b/crates/horizon-client/src/game/remote.rs
+@@ -6362,8 +6362,8 @@
+             left: held(Action::Left),
+             right: held(Action::Right),
+             jump: held(Action::Jump),
+-            shift: held(Action::Sneak),
+-            sprint: held(Action::Sprint),
++            shift: held(Action::Sneak) || (playing && self.touch_modifier(false)),
++            sprint: held(Action::Sprint) || (playing && self.touch_modifier(true)),
+             analog: None,
+         }
+         .with_stick(stick.filter(|_| playing));
+@@ -9302,16 +9302,73 @@
+             self.stop_remote_mining();
+         }
+         if !ready {
++            #[cfg(target_os = "ios")]
++            self.mobile_input.clear_actions();
+             // A screen's opening released the keys (`KeyMapping.releaseAll`).
+             self.hotbar_presses.clear();
+             return;
+         }
+         let (attack, use_item) = (self.left, self.right);
++        #[cfg(target_os = "ios")]
++        let (attack, use_item) = self.merge_touch_interaction(&mut input, attack, use_item);
+         input.tick(&mut RemoteInputWorld(self), attack, use_item);
++        #[cfg(target_os = "ios")]
++        {
++            self.mobile_input.ray = None;
++        }
+         self.remote_queued_keys();
+         if let Some(r) = self.remote.as_mut() {
+             r.input = input;
+         }
++    }
++
++    #[cfg(target_os = "ios")]
++    fn merge_touch_interaction(
++        &mut self,
++        input: &mut horizon_client::interaction_input::InteractionInput,
++        attack: bool,
++        use_item: bool,
++    ) -> (bool, bool) {
++        use horizon_client::interaction_input::Button;
++        let touch = &mut self.mobile_input;
++        let [tap_attack, tap_use] = std::mem::take(&mut touch.action_clicks);
++        let tap = touch.tap.take();
++        let mine = touch.mine;
++        let mine_started = std::mem::take(&mut touch.mine_started);
++        let [touch_attack, touch_use] = touch.action_down;
++        // Explicit buttons and physical inputs retain crosshair aim. Off-centre
++        // rays exist only inside the interaction tick, never in movement or aim.
++        if tap_attack {
++            input.press(Button::Attack);
++        }
++        if tap_use {
++            input.press(Button::Use);
++        }
++        if attack || use_item || tap_attack || tap_use || touch_attack || touch_use {
++            return (attack || touch_attack, use_item || touch_use);
++        }
++        if let Some(direction) = mine.or(tap) {
++            self.mobile_input.ray = Some(direction);
++            // A tap on an entity attacks it; a tap on a block places/uses it.
++            // The ordinary ray and reach checks enforce occlusion.
++            if mine.is_some() {
++                if mine_started {
++                    input.press(Button::Attack);
++                }
++            } else if self.pick_entity_hit().is_some() {
++                input.press(Button::Attack);
++            } else {
++                input.press(Button::Use);
++            }
++        }
++        (mine.is_some(), false)
++    }
++
++    fn touch_modifier(&self, sprint: bool) -> bool {
++        #[cfg(target_os = "ios")]
++        { self.mobile_input.modifiers[usize::from(sprint)] }
++        #[cfg(not(target_os = "ios"))]
++        { let _ = sprint; false }
+     }
+ 
+     /// `MultiPlayerGameMode.ensureHasSentCarriedItem`: the server hears of a

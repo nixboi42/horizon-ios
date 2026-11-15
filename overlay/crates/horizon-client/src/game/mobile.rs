@@ -35,7 +35,7 @@ pub struct Session {
 impl Session {
     /// The resource tree has already passed the native import integrity check.
     /// The game directory must be the app's isolated, writable sandbox directory.
-    pub fn new(root: PathBuf, window: Arc<Window>) -> Result<Self> {
+    pub fn new(root: PathBuf, window: Arc<Window>, username: &str) -> Result<Self> {
         let started = Instant::now();
         let root = std::fs::canonicalize(root)?;
         if let Some(error) = missing_resources(&root) {
@@ -51,6 +51,7 @@ impl Session {
         let mut options = Options::parse(std::iter::empty())?.ok_or("missing options")?;
         options.resources = root.clone();
         options.world = Some("Mobile Creative".into());
+        options.player_name = Some(username.to_owned());
         if std::env::var("HORIZON_IOS_CONTROL").as_deref() == Ok("1") {
             options.control = Some(PathBuf::from("ctl.sock"));
         }

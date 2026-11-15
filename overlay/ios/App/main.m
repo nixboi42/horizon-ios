@@ -9,6 +9,8 @@ static UIWindow *horizonWindow;
 static NSString *horizonStatus;
 void horizon_ios_status(const char *key);
 void horizon_ios_input_state(const char *json);
+void horizon_ios_launcher_attach(void);
+void horizon_ios_launcher_status(const char *key);
 static void attachWindow(void) {
     if (!horizonWindow || !horizonScene) { return; }
     horizonWindow.windowScene = horizonScene;
@@ -16,6 +18,7 @@ static void attachWindow(void) {
     [horizonWindow makeKeyAndVisible];
     [horizonWindow layoutIfNeeded];
     NSLog(@"Horizon scene attached: %@", NSStringFromCGRect(horizonWindow.bounds));
+    horizon_ios_launcher_attach();
     if (horizonStatus) { horizon_ios_status(horizonStatus.UTF8String); }
 }
 @interface HorizonSceneDelegate : UIResponder <UIWindowSceneDelegate>
@@ -133,6 +136,7 @@ extern void horizon_ios_sensitivity(float value);
 void horizon_ios_status(const char *key) {
     NSCAssert([NSThread isMainThread], @"UI must be on the main thread");
     horizonStatus = [NSString stringWithUTF8String:key];
+    horizon_ios_launcher_status(key);
     UIWindow *window = horizonWindow;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if ([scene isKindOfClass:UIWindowScene.class]) {
@@ -183,7 +187,7 @@ void horizon_ios_status(const char *key) {
     controls.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     if (controls.superview != window) { [window addSubview:controls]; }
     controls.hidden = strcmp(key, "terrain.ready") != 0 && strcmp(key, "gameplay.ready") != 0;
-    label.hidden = gameplay;
+    label.hidden = gameplay || [horizonStatus hasPrefix:@"launcher."];
     label.text = NSLocalizedString([NSString stringWithUTF8String:key], nil);
 }
 

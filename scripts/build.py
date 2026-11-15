@@ -5,6 +5,7 @@ import copy
 import fcntl
 import hashlib
 import json
+import mmap
 import os
 from pathlib import Path
 import plistlib
@@ -127,8 +128,8 @@ def cache_git(*args, **kwargs):
 def resolve(args, lock, patch_base):
     if not CACHE.exists():
         cache_git("init", "--bare")
-    if args.offline and not args.locked:
-        raise BuildError("--offline requires --locked")
+    if args.offline and not (args.locked or args.candidate or args.ref):
+        raise BuildError("--offline requires --locked, --candidate or an explicit cached --ref")
     # Pin the verified tree and the selected patch preimages in the cache.
     for key, revision in (("baseline", lock.get("baseline", lock["revision"])),
                           ("verified_base", lock["patch_base"]), ("revision", lock["revision"]),
@@ -144,7 +145,7 @@ def resolve(args, lock, patch_base):
     if args.locked:
         return lock.get("baseline", lock["revision"]) if args.baseline else lock["revision"]
 
-    ref = args.ref
+    ref = patch_base if args.candidate else args.ref
     if ref is None:
         head = output("git", "ls-remote", "--exit-code", lock["upstream"], "HEAD", timeout=60)
         ref, _, _ = head.partition("\t")
@@ -152,8 +153,12 @@ def resolve(args, lock, patch_base):
             raise BuildError("Official upstream did not return a commit SHA for HEAD")
     if ref.startswith("-") or ":" in ref:
         raise BuildError(f"Invalid upstream ref {ref!r}")
-    if not (re.fullmatch(r"[0-9a-f]{40}", ref)
-            and cache_git("cat-file", "-e", ref + "^{tree}", capture=True, allow_failure=True).returncode == 0):
+    cached = (re.fullmatch(r"[0-9a-f]{40}", ref)
+              and cache_git("cat-file", "-e", ref + "^{tree}", capture=True,
+                            allow_failure=True).returncode == 0)
+    if args.offline and not cached:
+        raise BuildError(f"Requested source {ref!r} is absent from cache; offline build cannot fetch it")
+    if not cached:
         cache_git("fetch", "--depth=1", "--no-tags", lock["upstream"], ref, timeout=180)
         ref = "FETCH_HEAD"
     revision = output("git", "--git-dir", CACHE, "rev-parse", ref + "^{commit}")
@@ -356,9 +361,13 @@ def build_environment(args, target):
     env.pop("CARGO_ENCODED_RUSTFLAGS", None)
     env["IPHONEOS_DEPLOYMENT_TARGET"] = target
     # Set the same paths used by the Xcode phase even when Xcode resets PATH.
-    env["HORIZON_CARGO"] = shutil.which("cargo", path=env.get("PATH")) or ""
+    env["HORIZON_CARGO"] = (env.get("HORIZON_CARGO")
+                            or shutil.which("cargo", path=env.get("PATH")) or "")
     if not env["HORIZON_CARGO"]:
         raise BuildError("Install Rust and rustup, then run rustup target add aarch64-apple-ios")
+    # Keep rustc and rustup paired with the selected Cargo proxy. Xcode's PATH
+    # otherwise can select a different Homebrew rustc without iOS std installed.
+    env["PATH"] = str(Path(env["HORIZON_CARGO"]).parent) + os.pathsep + env.get("PATH", "")
     return env
 
 
@@ -533,6 +542,93 @@ def inspect_ipa(ipa, source, env, minimum, resources):
     return info
 
 
+def archive_testflight(args, source, report, env, target):
+    version = report["port_version"]
+    output_dir = ROOT / "dist" / "testflight"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    archive = output_dir / f"HorizonIOS-{version}-{args.testflight_build}.xcarchive"
+    if archive.exists():
+        raise BuildError(f"Archive already exists: {archive}")
+    report["build_status"] = "running"
+    ios = source / "ios"
+    bundle = "dev.horizon.ios.distribution"
+    team = "B8B79VPAF5"
+    with tempfile.TemporaryDirectory(prefix="archive-", dir=output_dir) as work:
+        work = Path(work)
+        derived = source / ".local" / "testflight-derived"
+        # Keep generated files ignored so the reconstructed source can be reused.
+        project_dir = source / ".local" / "testflight-project"
+        project_dir.mkdir(parents=True, exist_ok=True)
+        # Xcode interprets project-relative source paths from the generated project.
+        app_project = project_dir / "HorizonIOSTestFlight.xcodeproj"
+        for name in ("App", "Resources", "UITests", "scripts", "Deployment.xcconfig", "project.yml", "TestFlight.yml"):
+            link = project_dir / name
+            if not link.is_symlink():
+                link.symlink_to(ios / name)
+        run("xcodegen", "generate", "--spec", project_dir / "TestFlight.yml",
+            "--project", project_dir, "--project-root", project_dir, env=env)
+        staged = work / archive.name
+        command = (
+            "xcodebuild", "-project", app_project, "-scheme", "HorizonIOSTestFlight",
+            "-configuration", "TestFlight", "-sdk", "iphoneos", "-destination",
+            "generic/platform=iOS", "-derivedDataPath", derived, "-archivePath", staged,
+            f"CURRENT_PROJECT_VERSION={args.testflight_build}", f"MARKETING_VERSION={version}",
+            f"IPHONEOS_DEPLOYMENT_TARGET={target}", "ARCHS=arm64",
+            f"SRCROOT={ios}", f"PROJECT_DIR={ios}", "archive",
+        )
+        sign = ("CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO") if args.testflight_unsigned else (
+            "-allowProvisioningUpdates",)
+        run(*command[:-1], *sign, command[-1], cwd=source, env=env)
+        app = staged / "Products/Applications/HorizonIOS.app"
+        run(ios / "scripts/verify-app.sh", app, "--private", env=env)
+        info = plistlib.loads((app / "Info.plist").read_bytes())
+        expected = {
+            "CFBundleIdentifier": bundle, "CFBundleShortVersionString": version,
+            "CFBundleVersion": args.testflight_build, "UIDeviceFamily": [1, 2],
+            "MinimumOSVersion": target,
+        }
+        if any(info.get(key) != value for key, value in expected.items()):
+            raise BuildError(f"Archive app metadata differs from {expected}")
+        if (info.get("CFBundleIcons", {}).get("CFBundlePrimaryIcon", {}).get("CFBundleIconName")
+                != "AppIcon" or not (app / "Assets.car").is_file()):
+            raise BuildError("Archive is missing the Horizon app icon")
+        allowed = {"Info.plist", "PkgInfo", "HorizonIOS", "Assets.car", "en.lproj",
+                   "_CodeSignature", "embedded.mobileprovision"}
+        for item in app.iterdir():
+            if item.name not in allowed and not re.fullmatch(r"AppIcon[\w@~.-]+\.png", item.name):
+                raise BuildError(f"Unexpected archive app content: {item.name}")
+        if any(path.is_symlink() for path in app.rglob("*")):
+            raise BuildError("Unexpected symlink in archived app")
+        # The IPA privacy scanner excludes provisioning material. Scan a private
+        # copy of the app payload without Xcode's signature and profile.
+        scan = work / "privacy"
+        shutil.copytree(app, scan, ignore=shutil.ignore_patterns(
+            "_CodeSignature", "embedded.mobileprovision"))
+        run(sys.executable, ios / "scripts/check_release.py", "--tree", scan, env=env)
+        with (app / "HorizonIOS").open("rb") as executable, mmap.mmap(
+                executable.fileno(), 0, access=mmap.ACCESS_READ) as binary:
+            for marker in (b"HORIZON_IOS_TEST_SESSION", b"HORIZON_IOS_SCENE",
+                           b"HORIZON_IOS_STARTUP_TRACE", b"HORIZON_PACKET_DIAGNOSTICS",
+                           b"MOBILE launcher_visible_ms", b"MOBILE first_rendered_ms",
+                           b"RESOURCE_IMPORT elapsed_ms"):
+                if binary.find(marker) >= 0:
+                    raise BuildError(f"Development diagnostic in archived app: {marker.decode()}")
+        signing = "unsigned"
+        if not args.testflight_unsigned:
+            run("codesign", "--verify", "--strict", app, env=env)
+            signature = run("codesign", "-dvv", app, env=env, capture=True).stderr
+            if f"TeamIdentifier={team}" not in signature.splitlines():
+                raise BuildError("Archive app is signed by a different team")
+            signing = next((line.removeprefix("Authority=") for line in signature.splitlines()
+                            if line.startswith("Authority=")), "unknown")
+        staged.rename(archive)
+    report["build_status"] = "passed"
+    report["archive"] = {"path": str(archive), "bundle_id": bundle, "version": version,
+                         "build": args.testflight_build, "team": team,
+                         "signing": signing}
+    print(f"Archive: {archive}", flush=True)
+
+
 def build(args, source, report, lock, target):
     env = build_environment(args, target)
     if sys.platform != "darwin":
@@ -546,6 +642,9 @@ def build(args, source, report, lock, target):
     report["sdk"] = output("xcrun", "--sdk", "iphoneos", "--show-sdk-version", env=env)
     toolchain = hashlib.sha256(json.dumps([report["rust"], report["xcode"], report["sdk"]]).encode()).hexdigest()[:16]
     env["CARGO_TARGET_DIR"] = str(BUILD / "cargo-target" / f"{target}-{toolchain}")
+    if args.testflight_build:
+        archive_testflight(args, source, report, env, target)
+        return
     deriv = source / ".local" / f"xcode-device-{target}"
     app = deriv / "Build/Products/Release-iphoneos/HorizonIOS.app"
     if report["build_status"] != "passed":
@@ -629,12 +728,17 @@ def cli():
     select = parser.add_mutually_exclusive_group()
     select.add_argument("--latest", action="store_true", help="Build the official default branch (default)")
     select.add_argument("--locked", action="store_true", help="Build the verified commit in upstream.lock")
+    select.add_argument("--candidate", action="store_true",
+                        help="Build patches/next at its pinned base without promoting it")
     select.add_argument("--baseline", action="store_true", help="Build the original verified iOS series")
     select.add_argument("--ref", help="Fetch a specific SHA, tag or branch")
     select.add_argument("--update", action="store_true", help="Build and test latest before updating upstream.lock")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--check", action="store_true", help="Check patches, source interfaces and Cargo metadata")
     action.add_argument("--compile-only", action="store_true", help="Build an asset-free Release app without packaging")
+    action.add_argument("--testflight-build", metavar="NUMBER", help="Archive the asset-free app for TestFlight")
+    parser.add_argument("--testflight-unsigned", action="store_true",
+                        help="Create a local unsigned TestFlight archive if signing is unavailable")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--public", action="store_true", help="Package without Minecraft files (defaults to locked)")
     mode.add_argument("--bundle-resources", action="store_true", help="Embed owned resources in a personal IPA")
@@ -643,7 +747,8 @@ def cli():
     signing.add_argument("--signed", action="store_true", help="Sign the intermediate app with a local development team")
     parser.add_argument("--test", action="store_true", help="Run targeted host and arm64 iOS checks")
     parser.add_argument("--expect-upstream", metavar="SHA", help="Stop if the resolved revision differs")
-    parser.add_argument("--offline", action="store_true", help="Use cached Git and Cargo data with --locked")
+    parser.add_argument("--offline", action="store_true",
+                        help="Use cached Git and Cargo data with --locked, --candidate or a cached --ref")
     parser.add_argument("--seed", type=lambda s: Path(s).resolve(), help="Seed the locked revision from a local upstream clone")
     parser.add_argument("--deployment-target", default=os.environ.get("IPHONEOS_DEPLOYMENT_TARGET"))
     parser.add_argument("--xcode", type=Path, help="Xcode.app or its Contents/Developer directory")
@@ -653,6 +758,16 @@ def cli():
         parser.add_argument(f"--{option}", type=lambda s: Path(s).resolve(),
                             default=BUILD / "resources" if option == "resource-cache" else None)
     args = parser.parse_args()
+    if args.testflight_unsigned and not args.testflight_build:
+        parser.error("--testflight-unsigned requires --testflight-build")
+    if args.testflight_build:
+        if not re.fullmatch(r"[1-9][0-9]{0,3}", args.testflight_build):
+            parser.error("--testflight-build requires a positive build number of up to four digits")
+        if any((args.latest, args.baseline, args.ref, args.update,
+                args.public, args.bundle_resources, args.signed, args.unsigned, args.test)):
+            parser.error("--testflight-build uses the locked release or pinned candidate without packaging or tests")
+        if not args.locked:
+            args.candidate = True
     if args.baseline:
         args.locked = True
     if args.update and (args.check or args.compile_only):
@@ -663,7 +778,7 @@ def cli():
         args.bundle_resources = True
     if args.check and args.test:
         parser.error("--check does source checks only. Use --compile-only --test.")
-    if args.public and not (args.latest or args.update or args.ref):
+    if args.public and not (args.latest or args.update or args.candidate or args.ref):
         args.locked = True
     return args
 

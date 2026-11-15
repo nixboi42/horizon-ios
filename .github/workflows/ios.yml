@@ -1,0 +1,68 @@
+name: iOS release checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  archive:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install build tools
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          rustup toolchain install stable --profile minimal
+          rustup target add --toolchain stable aarch64-apple-ios
+          rustup default stable
+      - name: Test builder
+        run: python3 -m unittest discover -s tests
+      - name: Verify candidate source reconstruction
+        run: ./build.sh --candidate --check --report .build/candidate.json
+      - name: Build and verify the locked unsigned archive
+        run: |
+          build=$(python3 -c 'import json; print(json.load(open("BUILD.json"))["build"])')
+          ./build.sh --locked --testflight-build "$build" --testflight-unsigned --report .build/locked.json
+      - name: Package asset-free IPA
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("upstream.lock"))["port_version"])')
+          build=$(python3 -c 'import json; print(json.load(open("BUILD.json"))["build"])')
+          series=$(python3 -c 'import json; print(json.load(open("upstream.lock"))["series"])')
+          scripts="patches/$series/frozen-overlay/ios/scripts"
+          app="dist/testflight/HorizonIOS-$version-$build.xcarchive/Products/Applications/HorizonIOS.app"
+          name="HorizonIOS-$version-$build-ci-unsigned.ipa"
+          "$scripts/make-ipa.sh" --app "$app" --output "dist/$name"
+          "$scripts/check_release.py" --archive "dist/$name"
+          (cd dist && shasum -a 256 "$name" > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: iOS-unsigned-CI
+          path: |
+            dist/*-ci-unsigned.ipa
+            dist/SHA256SUMS
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: iOS-build-reports
+          path: |
+            .build/candidate.json
+            .build/locked.json
+          if-no-files-found: warn

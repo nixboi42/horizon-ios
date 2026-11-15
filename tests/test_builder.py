@@ -97,6 +97,14 @@ class PatchStackTests(unittest.TestCase):
             with self.assertRaisesRegex(build.BuildError, "did not pass"):
                 build.run_filtered_test(self.root, {}, "fixture", "required_test")
 
+    def test_candidate_public_build_resolves_the_candidate_base(self):
+        with patch.object(sys, "argv", ["build.py", "--candidate", "--public", "--offline"]):
+            args = build.cli()
+        self.assertTrue(args.candidate)
+        self.assertFalse(args.locked)
+        lock = {"baseline": self.original, "patch_base": self.conflict, "revision": self.conflict}
+        self.assertEqual(build.resolve(args, lock, self.original), self.original)
+
     def test_verified_series_survives_candidate_and_shared_overlay_edits(self):
         patches = self.root / "patches"
         candidate = patches / "next"

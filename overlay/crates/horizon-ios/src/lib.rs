@@ -7,6 +7,7 @@ mod resources;
 mod scene;
 mod terrain;
 
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -15,7 +16,7 @@ use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::{Window, WindowId},
 };
 
@@ -32,6 +33,66 @@ impl log::Log for NativeLog {
     fn flush(&self) {}
 }
 static NATIVE_LOG: NativeLog = NativeLog;
+
+const COMMAND_NONE: u8 = 0;
+const COMMAND_PLAY: u8 = 1;
+const COMMAND_RETURN: u8 = 2;
+static LAUNCHER_COMMAND: AtomicU8 = AtomicU8::new(COMMAND_NONE);
+#[derive(Debug)]
+enum HostEvent {
+    LauncherAction,
+}
+static EVENT_PROXY: std::sync::OnceLock<EventLoopProxy<HostEvent>> = std::sync::OnceLock::new();
+static LAUNCHER_USERNAME: std::sync::OnceLock<std::sync::Mutex<String>> =
+    std::sync::OnceLock::new();
+
+fn launcher_username() -> String {
+    LAUNCHER_USERNAME
+        .get_or_init(|| std::sync::Mutex::new("Player".into()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
+fn valid_username(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 16
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+/// SwiftUI requests a session on the winit thread; it never starts gameplay on UIKit's callback.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn horizon_ios_play(username: *const std::ffi::c_char) {
+    let name = if username.is_null() {
+        "Player".to_owned()
+    } else {
+        // SAFETY: Swift passes a live NUL-terminated C string for this call.
+        unsafe { std::ffi::CStr::from_ptr(username) }
+            .to_str()
+            .ok()
+            .filter(|value| valid_username(value))
+            .unwrap_or("Player")
+            .to_owned()
+    };
+    *LAUNCHER_USERNAME
+        .get_or_init(|| std::sync::Mutex::new("Player".into()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = name;
+    LAUNCHER_COMMAND.store(COMMAND_PLAY, Ordering::Release);
+    if let Some(proxy) = EVENT_PROXY.get() {
+        let _ = proxy.send_event(HostEvent::LauncherAction);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn horizon_ios_return_to_launcher() {
+    LAUNCHER_COMMAND.store(COMMAND_RETURN, Ordering::Release);
+    if let Some(proxy) = EVENT_PROXY.get() {
+        let _ = proxy.send_event(HostEvent::LauncherAction);
+    }
+}
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -363,6 +424,7 @@ struct App {
     controls: gameplay_input::Controls,
     menu_touch: Option<u64>,
     gameplay_ready: bool,
+    gameplay_stopping: bool,
     resource_root: Option<std::path::PathBuf>,
     import: Option<std::thread::JoinHandle<std::io::Result<std::path::PathBuf>>>,
     terrain_attempted: bool,
@@ -391,6 +453,7 @@ impl Default for App {
             controls: Default::default(),
             menu_touch: None,
             gameplay_ready: false,
+            gameplay_stopping: false,
             resource_root: None,
             import: None,
             terrain_attempted: false,
@@ -597,7 +660,7 @@ impl App {
         }
     }
 }
-impl ApplicationHandler for App {
+impl ApplicationHandler<HostEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.active = true;
         self.movement_time = Instant::now();
@@ -642,6 +705,19 @@ impl ApplicationHandler for App {
             if let Err(error) = game.resume() {
                 self.fail(error);
             }
+            return;
+        }
+        if !matches!(
+            std::env::var("HORIZON_IOS_SCENE").as_deref(),
+            Ok("terrain" | "synthetic")
+        ) {
+            status(if self.resource_root.is_some() {
+                "launcher.ready"
+            } else if self.import.is_some() || self.preparation.is_some() {
+                "launcher.loading"
+            } else {
+                "launcher.resources_missing"
+            });
             return;
         }
         let window = self.window.as_ref().unwrap().clone();
@@ -721,6 +797,10 @@ impl ApplicationHandler for App {
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         if self.gameplay.is_some() {
+            if matches!(event, WindowEvent::CloseRequested) {
+                LAUNCHER_COMMAND.store(COMMAND_RETURN, Ordering::Release);
+                return;
+            }
             // UIKit owns typing, but releases must still clear physical keys
             // held before the field opened (otherwise movement can stick).
             let native_text_event = matches!(event, WindowEvent::Ime(_))
@@ -854,8 +934,91 @@ impl ApplicationHandler for App {
             game.exiting(event_loop);
         }
     }
+    fn user_event(&mut self, _: &ActiveEventLoop, _: HostEvent) {}
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let command = LAUNCHER_COMMAND.swap(COMMAND_NONE, Ordering::AcqRel);
+        if command == COMMAND_RETURN {
+            self.release_gameplay_controls();
+            if let Some(game) = &mut self.gameplay {
+                match game.begin_return_to_launcher() {
+                    Ok(true) => {
+                        drop(self.gameplay.take());
+                        self.gameplay_stopping = false;
+                        background_save(false);
+                        status(if self.resource_root.is_some() {
+                            "launcher.ready"
+                        } else {
+                            "launcher.resources_missing"
+                        });
+                    }
+                    Ok(false) => {
+                        self.gameplay_stopping = true;
+                        status("gameplay.stopping");
+                    }
+                    Err(error) => {
+                        eprintln!("Horizon iOS session shutdown failed: {error}");
+                        status("gameplay.menu");
+                    }
+                }
+            }
+            self.gameplay_ready = false;
+        } else if command == COMMAND_PLAY && self.gameplay.is_none() {
+            if let (Some(root), Some(window)) = (&self.resource_root, &self.window) {
+                status("gameplay.loading");
+                match horizon_client::game::mobile::Session::new(
+                    root.clone(),
+                    window.clone(),
+                    &launcher_username(),
+                ) {
+                    Ok(mut game) => {
+                        game.window_event(
+                            event_loop,
+                            window.id(),
+                            WindowEvent::Resized(drawable_size(window)),
+                        );
+                        self.gameplay = Some(Box::new(game));
+                    }
+                    Err(error) => {
+                        eprintln!("Horizon iOS session failed to start: {error}");
+                        status("launcher.error");
+                    }
+                }
+            } else {
+                status("launcher.resources_missing");
+            }
+        }
+        if self.gameplay_stopping {
+            let finished =
+                self.gameplay
+                    .as_mut()
+                    .is_some_and(|game| match game.finish_return_to_launcher() {
+                        Ok(finished) => finished,
+                        Err(error) => {
+                            eprintln!("Horizon iOS session shutdown failed: {error}");
+                            false
+                        }
+                    });
+            if finished {
+                drop(self.gameplay.take());
+                self.gameplay_stopping = false;
+                background_save(false);
+                status(if self.resource_root.is_some() {
+                    "launcher.ready"
+                } else {
+                    "launcher.resources_missing"
+                });
+            } else {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(
+                    Instant::now() + Duration::from_millis(50),
+                ));
+                return;
+            }
+        }
         if self.gameplay.is_some() {
+            if self.gameplay_stopping {
+                // A begin-close error leaves the session active so the person can try again.
+                self.gameplay_stopping = false;
+            }
             native_input::sync(self.gameplay.as_mut().unwrap(), self.active, event_loop);
             let was_playing = self.gameplay_ready;
             // Native Back/chat can change the screen before this frame's tick.
@@ -898,45 +1061,17 @@ impl ApplicationHandler for App {
             match job.join() {
                 Ok(Ok(root)) => self.resource_root = Some(root),
                 Ok(Err(e)) => {
-                    self.transition(Initialization::Failed);
+                    status("launcher.resources_missing");
                     eprintln!("Prepared resources unavailable: {e}");
                 }
                 Err(_) => {
-                    self.transition(Initialization::Failed);
+                    status("launcher.error");
                     eprintln!("Prepared resource import worker panicked");
                 }
             }
             if self.active {
                 self.resumed(event_loop);
             }
-        }
-        if self.active
-            && !self.terrain_attempted
-            && self.resource_root.is_some()
-            && !matches!(
-                std::env::var("HORIZON_IOS_SCENE").as_deref(),
-                Ok("terrain" | "synthetic")
-            )
-        {
-            self.terrain_attempted = true;
-            self.gpu = None;
-            self.flight.clear();
-            status("gameplay.loading");
-            let root = self.resource_root.clone().unwrap();
-            let window = self.window.as_ref().unwrap().clone();
-            match horizon_client::game::mobile::Session::new(root, window) {
-                Ok(mut game) => {
-                    let window = self.window.as_ref().unwrap();
-                    game.window_event(
-                        event_loop,
-                        window.id(),
-                        WindowEvent::Resized(drawable_size(window)),
-                    );
-                    self.gameplay = Some(Box::new(game));
-                }
-                Err(error) => self.fail(error),
-            }
-            return;
         }
         if !self.terrain_attempted
             && self.resource_root.is_some()
@@ -976,7 +1111,11 @@ impl ApplicationHandler for App {
                 self.resumed(event_loop);
             }
         }
-        if self.active {
+        let diagnostics = matches!(
+            std::env::var("HORIZON_IOS_SCENE").as_deref(),
+            Ok("terrain" | "synthetic")
+        );
+        if self.active && (diagnostics || self.gameplay.is_some()) {
             if Instant::now() >= self.next_frame
                 && let Some(w) = &self.window
             {
@@ -1141,7 +1280,11 @@ pub unsafe extern "C" fn horizon_ios_run(
             ..App::default()
         };
         app.transition(Initialization::LoadingResources);
-        EventLoop::new()?.run_app(&mut app)?;
+        let event_loop = EventLoop::<HostEvent>::with_user_event().build()?;
+        EVENT_PROXY
+            .set(event_loop.create_proxy())
+            .map_err(|_| "iOS event proxy already initialized")?;
+        event_loop.run_app(&mut app)?;
         Ok(())
     });
     match result {

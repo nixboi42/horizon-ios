@@ -14,11 +14,13 @@
 		5D70201A57CAFBCED11E9BA8 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0068D1496E0BBADF23A447B /* CoreGraphics.framework */; };
 		5E37FFDFACBB818C537DB6E0 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07C7B372C70A059B72436A98 /* UIKit.framework */; };
 		699F791E721CBBEAC9B8278A /* PreparedResources in Resources */ = {isa = PBXBuildFile; fileRef = 8C532A824AC19F6AE986B938 /* PreparedResources */; };
+		6BC912E049BAD7F8906199D5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 76B1BADF18D8998B9C66DA09 /* Assets.xcassets */; };
 		733BE7642904485946ABC726 /* NavigationKeyboardTests.m in Sources */ = {isa = PBXBuildFile; fileRef = CEFB4EFECA30C5D8C049AE5D /* NavigationKeyboardTests.m */; };
 		8B5625E7A1B20829FB260F1E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DF5B98FA7C096A02AD85092B /* Foundation.framework */; };
 		8C08037AE99CDDC9A9F19545 /* en.lproj in Resources */ = {isa = PBXBuildFile; fileRef = CEDDCDB9353B3E42F7052ED6 /* en.lproj */; };
 		8F9D00AAC869772FAB593910 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 646C0A797D5FAF7F9E723CE0 /* Metal.framework */; };
 		B3EAC8A3ACDB02AB8FCCBD03 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 261DDF4C3E7DF5811D6662EC /* CoreFoundation.framework */; };
+		EC7AD0DA8AC5B459FABD7618 /* Launcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F94611FC0BCB70234658176 /* Launcher.swift */; };
 		ED7496CB9C32AA9D0C6C6106 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 751B4BCFE9B1E6BB738BB17F /* main.m */; };
 		FABFF11A61F3087398E018BF /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D9F8D73DCA873A52B57EE42A /* QuartzCore.framework */; };
 /* End PBXBuildFile section */
@@ -34,14 +36,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Deployment.xcconfig; sourceTree = SOURCE_ROOT; };
 		07C7B372C70A059B72436A98 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		0A0874EB0F973A972B828E99 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		0A9C934476AA5D5ABDE33310 /* HorizonIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HorizonIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		126E808C54BC57AE8BA9552B /* GameController.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameController.framework; path = System/Library/Frameworks/GameController.framework; sourceTree = SDKROOT; };
 		261DDF4C3E7DF5811D6662EC /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		43B0B55B527FB3855EAE19E7 /* Deployment.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Deployment.xcconfig; sourceTree = "<group>"; };
+		5F94611FC0BCB70234658176 /* Launcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Launcher.swift; sourceTree = "<group>"; };
 		646C0A797D5FAF7F9E723CE0 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		751B4BCFE9B1E6BB738BB17F /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		76B1BADF18D8998B9C66DA09 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8C532A824AC19F6AE986B938 /* PreparedResources */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PreparedResources; path = Resources/PreparedResources; sourceTree = SOURCE_ROOT; };
 		917611DB4BA0BDDC45BACFB9 /* HorizonIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HorizonIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7FF304CA0E99C2EA96AFAD6 /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
@@ -89,13 +93,23 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		5D19EA1B4F888744D1493041 /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				43B0B55B527FB3855EAE19E7 /* Deployment.xcconfig */,
+			);
+			name = ios;
+			path = .;
+			sourceTree = "<group>";
+		};
 		8D5F78D013E92A77BFD8532C = {
 			isa = PBXGroup;
 			children = (
-				F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */,
 				CEDDCDB9353B3E42F7052ED6 /* en.lproj */,
 				8C532A824AC19F6AE986B938 /* PreparedResources */,
 				9004F52CCC298E57CAD75ED3 /* App */,
+				5D19EA1B4F888744D1493041 /* ios */,
+				E843E90DC3696DC086C68132 /* Resources */,
 				952D84D999830E20C360AFA2 /* UITests */,
 				1DFDCD1089C1865388C3681E /* Frameworks */,
 				E843679B8F6C02CEE4CE9E79 /* Products */,
@@ -105,6 +119,7 @@
 		9004F52CCC298E57CAD75ED3 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				5F94611FC0BCB70234658176 /* Launcher.swift */,
 				751B4BCFE9B1E6BB738BB17F /* main.m */,
 			);
 			path = App;
@@ -126,6 +141,14 @@
 				0A9C934476AA5D5ABDE33310 /* HorizonIOSUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E843E90DC3696DC086C68132 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				76B1BADF18D8998B9C66DA09 /* Assets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -212,6 +235,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6BC912E049BAD7F8906199D5 /* Assets.xcassets in Resources */,
 				699F791E721CBBEAC9B8278A /* PreparedResources in Resources */,
 				8C08037AE99CDDC9A9F19545 /* en.lproj in Resources */,
 			);
@@ -255,6 +279,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EC7AD0DA8AC5B459FABD7618 /* Launcher.swift in Sources */,
 				ED7496CB9C32AA9D0C6C6106 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -287,7 +312,7 @@
 		};
 		156615653FCDC356C4690B6D /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */;
+			baseConfigurationReference = 43B0B55B527FB3855EAE19E7 /* Deployment.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = arm64;
@@ -346,7 +371,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/../.local/ios-libs/$(PLATFORM_NAME)/$(CONFIGURATION)",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -419,7 +444,7 @@
 		};
 		F74389F13B533B6AD687896B /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F58065C3084D4B6AB59FB881 /* Deployment.xcconfig */;
+			baseConfigurationReference = 43B0B55B527FB3855EAE19E7 /* Deployment.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = arm64;
@@ -472,7 +497,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/../.local/ios-libs/$(PLATFORM_NAME)/$(CONFIGURATION)",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				OTHER_LDFLAGS = (

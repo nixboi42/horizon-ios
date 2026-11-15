@@ -1,0 +1,13 @@
+{
+  "build": "11",
+  "version": "0.2.0",
+  "tag": "v0.2.0-beta.11",
+  "ipa": "HorizonIOS-0.2.0-11-touch-toggles-unsigned.ipa",
+  "sha256": "a6f4c69e9007826d5fef8edfa5cebd6b6dc3467b977d8e193af510ea1b4b44e5",
+  "upstream": "e9358e2892e1a348aca5e96fa9308458d7566e5d",
+  "patch_stack_digest": "221530a1873e25a24f8783060c3154f8299b312a566d76c9539eacc8c82de0ca",
+  "deployment_target": "15.0",
+  "rust": "1.100.0",
+  "xcode": "27.2 (27B52)",
+  "ios_sdk": "27.2"
+}

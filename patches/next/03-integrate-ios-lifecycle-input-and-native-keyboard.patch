@@ -869,6 +869,20 @@ index f2e5cf01c1ee752a8f8dafd44e823c261315250e..8dfcd3253042a89cb084698a939a3a42
          use osk::Output;
          let (key, text) = match &out {
              Output::Text(t) => (None, Some(t.as_str())),
+diff --git a/crates/horizon-client/src/game/pointer_capture.rs b/crates/horizon-client/src/game/pointer_capture.rs
+--- a/crates/horizon-client/src/game/pointer_capture.rs
++++ b/crates/horizon-client/src/game/pointer_capture.rs
+@@ -259,7 +259,9 @@ impl Game<'_> {
+     /// it: a genuinely hidden `--offscreen` run, an agent's window no one has clicked yet, or a
+     /// scripted run, which plays the game while the person may be using the computer.
+     pub(super) fn internal_grab(&self) -> bool {
+-        (self.options.offscreen && !self.split_window)
++        // UIKit touch look uses the game's grab state without a system cursor grab.
++        cfg!(target_os = "ios")
++            || (self.options.offscreen && !self.split_window)
+             || self.unclaimed_window
+             || self.scripted_run()
+     }
 diff --git a/crates/horizon-client/src/game/remote.rs b/crates/horizon-client/src/game/remote.rs
 index 007d82998a6406bcab0d96ca7baf56052f09d733..85c73e5b76a05d607488a34b2ff1c2ef8f195180 100644
 --- a/crates/horizon-client/src/game/remote.rs

@@ -1,0 +1,160 @@
+diff --git a/crates/horizon-client-render/src/multiline_edit.rs b/crates/horizon-client-render/src/multiline_edit.rs
+index 6994b8d34f46e63a91c69844e377bbbb466e01b9..9a685657a13da35a8cd822e0e192b641d7e593c8 100644
+--- a/crates/horizon-client-render/src/multiline_edit.rs
++++ b/crates/horizon-client-render/src/multiline_edit.rs
+@@ -437,6 +437,8 @@ impl MultiLineEdit {
+         ) {
+             return;
+         }
++        #[cfg(target_os = "ios")]
++        crate::ui::record_text_field_press();
+         if double {
+             self.select_word_at_cursor();
+         } else {
+diff --git a/crates/horizon-client-render/src/screen_draw.rs b/crates/horizon-client-render/src/screen_draw.rs
+index ae6076172cf2f14fad0508ffa46a25ada60b7489..a1145945bbaa59c29514d737db8c7985c7cca570 100644
+--- a/crates/horizon-client-render/src/screen_draw.rs
++++ b/crates/horizon-client-render/src/screen_draw.rs
+@@ -868,6 +868,8 @@ impl TextField {
+     /// the word the pointer is in (`EditBox.selectWord`), any other click
+     /// places the caret there.
+     pub fn click(&mut self, m: &Measure, x: f64, extend: bool, double: bool) {
++        #[cfg(target_os = "ios")]
++        crate::ui::record_text_field_press();
+         let pos = (x.floor() as i32 - self.text_x()).min(self.inner_width());
+         let rest = sub(&self.value, self.display, chars(&self.value));
+         let at = self.display + m.plain(&rest, pos, false);
+diff --git a/crates/horizon-client-render/src/settings_shell.rs b/crates/horizon-client-render/src/settings_shell.rs
+index 499de9762d13b0544f5669ed5e25c0c86d592d09..912178ce04f38130556f23d1b4b43b386d3b7279 100644
+--- a/crates/horizon-client-render/src/settings_shell.rs
++++ b/crates/horizon-client-render/src/settings_shell.rs
+@@ -2460,6 +2460,8 @@ impl<S: Screen + Default> Hosted for Shell<S> {
+                 self.searched();
+                 return vec![CLICK];
+             }
++            #[cfg(target_os = "ios")]
++            crate::ui::record_text_field_press();
+             self.focus = Some(Target::Search);
+             self.search.reset_blink();
+             self.search.move_cursor_to_end(false);
+diff --git a/crates/horizon-client-render/src/ui.rs b/crates/horizon-client-render/src/ui.rs
+index 93f3823903692f77ef2107d781b2c14296432023..cf264f70c139f18cefd94c428c4786567e8b10d5 100644
+--- a/crates/horizon-client-render/src/ui.rs
++++ b/crates/horizon-client-render/src/ui.rs
+@@ -1245,6 +1245,27 @@ fn tooltip_box(
+     }
+ }
+ 
++#[cfg(target_os = "ios")]
++thread_local! {
++    // None outside dispatch of a real menu touch. Synthetic focus clicks
++    // from keyboard navigation and controllers cannot request a keyboard.
++    static TEXT_FIELD_PRESS: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
++}
++
++#[cfg(target_os = "ios")]
++pub fn track_text_field_press(dispatch: impl FnOnce()) -> bool {
++    TEXT_FIELD_PRESS.set(Some(false));
++    dispatch();
++    TEXT_FIELD_PRESS.replace(None) == Some(true)
++}
++
++#[cfg(target_os = "ios")]
++pub fn record_text_field_press() {
++    if TEXT_FIELD_PRESS.get().is_some() {
++        TEXT_FIELD_PRESS.set(Some(true));
++    }
++}
++
+ /// The EditBox text field.
+ #[derive(Clone, Debug)]
+ pub struct EditBox {
+@@ -1731,6 +1752,10 @@ impl EditBox {
+     /// EditBox.onClick: the cursor to the pointer, extending the selection
+     /// with Shift; a double click selects the word under it (`selectWord`).
+     pub fn click(&mut self, atlas: &HudAtlas, x: f32, shift: bool, double: bool) {
++        #[cfg(target_os = "ios")]
++        if self.editable {
++            record_text_field_press();
++        }
+         let pos = self.position_at(atlas, x);
+         if double {
+             let (start, end) = (
+diff --git a/crates/horizon-client/src/game/books.rs b/crates/horizon-client/src/game/books.rs
+index 2fb697afba3a2fe6cabec788e072a05c8f18b882..c15459fc51230bbaa8f75e24692d19d340a65877 100644
+--- a/crates/horizon-client/src/game/books.rs
++++ b/crates/horizon-client/src/game/books.rs
+@@ -1312,6 +1312,8 @@ impl Game<'_> {
+                         *signing = false;
+                     }
+                 } else if inside(left + 36.0, 50.0, 114.0, 9.0) {
++                    #[cfg(target_os = "ios")]
++                    ui::record_text_field_press();
+                     self.book_title_click(left + 36.0, mx);
+                 }
+             }
+@@ -1330,6 +1332,8 @@ impl Game<'_> {
+                     click(self);
+                     self.save_book(false);
+                 } else if inside(left + 36.0, 32.0, 114.0, 14.0 * 9.0) {
++                    #[cfg(target_os = "ios")]
++                    ui::record_text_field_press();
+                     self.book_page_click(left + 36.0, 32.0, mx, my, double);
+                 }
+             }
+diff --git a/crates/horizon-client/src/game/lan_screen.rs b/crates/horizon-client/src/game/lan_screen.rs
+index 6f411f7069bf96f28539edec2fb151f0e7f4eb0d..d8b53a2107c27e7e585d5f2aca224b94852e5786 100644
+--- a/crates/horizon-client/src/game/lan_screen.rs
++++ b/crates/horizon-client/src/game/lan_screen.rs
+@@ -1198,6 +1198,10 @@ impl Game<'_> {
+                 150.0,
+                 20.0,
+             );
++        #[cfg(target_os = "ios")]
++        if o.port.focused {
++            ui::record_text_field_press();
++        }
+         let hit = o.hit(self.cursor, (w, h));
+         if let Some(b) = hit {
+             o.focused_button = Some(b);
+diff --git a/crates/horizon-client/src/game/pad_menu.rs b/crates/horizon-client/src/game/pad_menu.rs
+index 8dfcd3253042a89cb084698a939a3a423a95bc8a..f63fb744f0769d450a18c8bb3f6a5d234e337d04 100644
+--- a/crates/horizon-client/src/game/pad_menu.rs
++++ b/crates/horizon-client/src/game/pad_menu.rs
+@@ -2176,6 +2176,8 @@ impl Game<'_> {
+             .map(|t| t.screen_key())
+             .hash(&mut hasher);
+         (self.sign_edit.is_some(), self.book.is_some()).hash(&mut hasher);
++        #[cfg(target_os = "ios")]
++        self.ui.in_bed_chat.hash(&mut hasher);
+         self.pad_prompt_key().hash(&mut hasher);
+         hasher.finish()
+     }
+diff --git a/crates/horizon-client/src/game/recipe_book.rs b/crates/horizon-client/src/game/recipe_book.rs
+index 1f3dc74b114be7f09cc3de20c700ddfa27effb7a..ce160c6938f6a6a76ee2b1eb55b0a8a2b35014c4 100644
+--- a/crates/horizon-client/src/game/recipe_book.rs
++++ b/crates/horizon-client/src/game/recipe_book.rs
+@@ -774,6 +774,8 @@ impl Game<'_> {
+             // left edge plus eight to the search box's own left edge.
+             let magnifier = inside(cursor, xo + 8.0, yo + 13.0, search.x - xo, 14.0);
+             if magnifier || inside(cursor, search.x, search.y, search.width, search.height) {
++                #[cfg(target_os = "ios")]
++                horizon_client::ui::record_text_field_press();
+                 self.recipe_ui.search_drag = true;
+                 search.focused = true;
+                 search.reset_blink();
+diff --git a/crates/horizon-client/src/title/flat.rs b/crates/horizon-client/src/title/flat.rs
+index bb4f3417373ce8ed2f88019bce936bdc9657cba1..3f922eec7784784937ff6df7b412574e55f386ed 100644
+--- a/crates/horizon-client/src/title/flat.rs
++++ b/crates/horizon-client/src/title/flat.rs
+@@ -560,6 +560,10 @@ pub(super) fn click(state: &mut State, cursor: (f32, f32), size: (f32, f32)) {
+         Page::Presets => {
+             let field = share_field(size);
+             state.share_focused = ui::hovered(cursor, field[0], field[1], field[2], field[3]);
++            #[cfg(target_os = "ios")]
++            if state.share_focused {
++                ui::record_text_field_press();
++            }
+             if state.preset_scroll.press(cursor, bar, top, bottom, content) {
+                 return;
+             }

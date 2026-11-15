@@ -1,0 +1,264 @@
+--- a/crates/horizon-client/src/game/startup_menu.rs
++++ b/crates/horizon-client/src/game/startup_menu.rs
+@@ -389,6 +389,11 @@
+     let handle = std::thread::Builder::new()
+         .name("resource-loader".into())
+         .spawn(move || {
++            #[cfg(target_os = "ios")]
++            if let Err(error) = mobile::prepare_resources(&vanilla_root) {
++                let _ = sender.send(LoaderMsg::Done(Err(error.to_string())));
++                return;
++            }
+             let (root, pack_error) = startup_resource_root(&vanilla_root, &settings, &dev_mods);
+             let result = load_resources(
+                 root,
+--- a/crates/horizon-client/src/game/resource_loader.rs
++++ b/crates/horizon-client/src/game/resource_loader.rs
+@@ -2,6 +2,7 @@
+ //! (`GameCpuResources`, `EntityModels`), what the background loader publishes (`Loaded`,
+ //! `LoaderMsg`), the world's rest loader and a pending world entry, the ordinary launch
+ //! (`run_loading`) and the smoke run's report (`write_report`).
++use super::resource_load::Step;
+ use super::*;
+ 
+ /// CPU-only startup data, owned by one loader generation. No file reads or
+@@ -89,71 +90,83 @@
+             cart_models,
+             creative_screen,
+         ) = std::thread::scope(|scope| {
+-            let painting_variants = named_scope(scope, "game_cpu.paintings", move || {
+-                paintings::PaintingVariants::load(root)
+-            });
+-            let frame_model = named_scope(scope, "game_cpu.frame", move || {
+-                frames::bake_frame(root, "item_frame")
+-            });
+-            let glow_frame_model = named_scope(scope, "game_cpu.glow_frame", move || {
+-                frames::bake_frame(root, "glow_item_frame")
+-            });
+-            let map_frame_model = named_scope(scope, "game_cpu.map_frame", move || {
+-                frames::bake_frame(root, "item_frame_map")
+-            });
+-            let glow_map_frame_model = named_scope(scope, "game_cpu.glow_map_frame", move || {
+-                frames::bake_frame(root, "glow_item_frame_map")
+-            });
+-            let armor_stand_assets = named_scope(scope, "game_cpu.armor_stands", move || {
+-                armor_stands::ArmorStandAssets::load(root, document)
+-            });
+-            let waypoint_styles = named_scope(scope, "game_cpu.waypoints", move || {
+-                horizon_client::locator_bar::WaypointStyles::load(root)
+-            });
+-            let boat_models = named_scope(scope, "game_cpu.boats", move || {
+-                boats::BoatModels::load(document)
+-            });
+-            let cart_models = named_scope(scope, "game_cpu.carts", move || {
+-                minecarts::CartModels::load(document)
+-            });
+-            let creative_screen = named_scope(scope, "game_cpu.creative", move || {
+-                let mut creative = Creative::load(root).map_err(|error| error.to_string())?;
+-                let tab_modifiers =
+-                    horizon_client::polytone_creative_tabs::TabModifier::read_all(root);
+-                creative.set_pack_modifiers(tab_modifiers);
+-                Ok::<_, String>(creative)
+-            });
++            let painting_variants = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.paintings",
++                move || paintings::PaintingVariants::load(root),
++            );
++            let frame_model = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.frame",
++                move || frames::bake_frame(root, "item_frame"),
++            );
++            let glow_frame_model = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.glow_frame",
++                move || frames::bake_frame(root, "glow_item_frame"),
++            );
++            let map_frame_model = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.map_frame",
++                move || frames::bake_frame(root, "item_frame_map"),
++            );
++            let glow_map_frame_model = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.glow_map_frame",
++                move || frames::bake_frame(root, "glow_item_frame_map"),
++            );
++            let armor_stand_assets = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.armor_stands",
++                move || armor_stands::ArmorStandAssets::load(root, document),
++            );
++            let waypoint_styles = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.waypoints",
++                move || horizon_client::locator_bar::WaypointStyles::load(root),
++            );
++            let boat_models = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.boats",
++                move || boats::BoatModels::load(document),
++            );
++            let cart_models = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.carts",
++                move || minecarts::CartModels::load(document),
++            );
++            let creative_screen = Step::spawn(
++                scope,
++                !cfg!(target_os = "ios"),
++                "game_cpu.creative",
++                move || {
++                    let mut creative = Creative::load(root).map_err(|error| error.to_string())?;
++                    let tab_modifiers =
++                        horizon_client::polytone_creative_tabs::TabModifier::read_all(root);
++                    creative.set_pack_modifiers(tab_modifiers);
++                    Ok::<_, String>(creative)
++                },
++            );
+             (
+-                painting_variants
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                frame_model
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                glow_frame_model
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                map_frame_model
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                glow_map_frame_model
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                armor_stand_assets
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                waypoint_styles
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                boat_models
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                cart_models
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+-                creative_screen
+-                    .join()
+-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
++                painting_variants.join(),
++                frame_model.join(),
++                glow_frame_model.join(),
++                map_frame_model.join(),
++                glow_map_frame_model.join(),
++                armor_stand_assets.join(),
++                waypoint_styles.join(),
++                boat_models.join(),
++                cart_models.join(),
++                creative_screen.join(),
+             )
+         });
+         Ok(Self {
+--- a/crates/horizon-client/src/game/resource_load.rs
++++ b/crates/horizon-client/src/game/resource_load.rs
+@@ -535,7 +535,16 @@
+                     "Horizon: rest-ready after {} ms",
+                     started.elapsed().as_millis()
+                 );
++                #[cfg(not(target_os = "ios"))]
+                 write_prepared_files(vanilla_root);
++                #[cfg(target_os = "ios")]
++                {
++                    // Optional cache creation competes with first-world reads.
++                    // Keep only the path until the client can actually play.
++                    *PENDING_PREPARED
++                        .lock()
++                        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(vanilla_root);
++                }
+                 Ok(())
+             })?;
+         Some(WorldRestLoader {
+@@ -614,13 +623,21 @@
+ /// the next starts read them from one file (#1961).
+ pub(super) fn write_prepared_files(root: PathBuf) {
+     use horizon_core::prepared_files;
+-    if prepared_files::open(&root).is_some() || !root.join("horizon-resources.json").is_file() {
+-        return;
+-    }
+     let spawned = std::thread::Builder::new()
+         .name("Prepared data file".into())
+         .spawn(move || {
+             horizon_threads::idle_current();
++            // Sessions share the immutable root. Never race writers on the
++            // same PID-named temporary file, or stack cache work in memory.
++            static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
++            let Ok(_writing) = WRITING.try_lock() else {
++                return;
++            };
++            if prepared_files::open(&root).is_some()
++                || !root.join("horizon-resources.json").is_file()
++            {
++                return;
++            }
+             let started = Instant::now();
+             match prepared_files::write(&root) {
+                 Ok(()) => log::info!(
+@@ -638,3 +655,17 @@
+         );
+     }
+ }
++
++#[cfg(target_os = "ios")]
++static PENDING_PREPARED: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
++
++#[cfg(target_os = "ios")]
++pub(super) fn finish_mobile_startup() {
++    let root = PENDING_PREPARED
++        .lock()
++        .unwrap_or_else(std::sync::PoisonError::into_inner)
++        .take();
++    if let Some(root) = root {
++        write_prepared_files(root);
++    }
++}
+--- a/crates/horizon-client/src/game/loading_screen.rs
++++ b/crates/horizon-client/src/game/loading_screen.rs
+@@ -277,18 +277,25 @@
+             self.started.elapsed().as_secs_f32(),
+             self.settings.file.double("panoramaScrollSpeed") as f32,
+         );
++        let mut presented = false;
+         if let Some(renderer) = &mut self.renderer {
+             match renderer.render(&frame) {
+                 Ok(true) if self.gui.is_some() && self.menu.pending.is_none() => {
++                    presented = true;
+                     self.title_drawn = true;
+                     self.menu.perf.title_shown()
+                 }
+-                Ok(_) => {}
++                Ok(shown) => presented = shown,
+                 Err(e) => log::warn!("Horizon: loading screen frame failed: {e}"),
+             }
+         }
+-        if !self.shown {
++        if !self.shown && presented {
+             self.shown = true;
++            if cfg!(target_os = "ios") && option_env!("HORIZON_TESTFLIGHT").is_none() {
++                log::info!("MOBILE first_rendered_ms={:.2}",
++                    self.started.elapsed().as_secs_f64() * 1000.);
++            }
++
+             startup::mark("loading_screen.shown");
+             log::info!(
+                 "Horizon: loading screen shown after {} ms",

@@ -6,3 +6,14 @@
 04-add-network-diagnostics.patch
 05-record-port-release-and-contribution-guidance.patch
 06-omit-build-machine-path-from-ios-crash-reports.patch
+07-separate-ios-keyboard-presentation.patch
+08-ios-startup-budget.patch
+09-return-from-minecraft-title-to-ios-launcher.patch
+10-ios-low-memory-rendering.patch
+11-ios-touch-interaction.patch
+12-ios-frame-overlap.patch
+13-ios-display-pacing.patch
+14-ios-drawable-pool.patch
+15-ios-early-title.patch
+16-ios-audio.patch
+17-keep-touch-mining-held.patch

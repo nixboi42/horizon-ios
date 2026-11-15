@@ -1,0 +1,588 @@
+--- a/crates/horizon-threads/src/process_memory.rs
++++ b/crates/horizon-threads/src/process_memory.rs
+@@ -105,6 +105,40 @@
+     }
+ }
+ 
++/// Keep policy consistent across the loader, streaming, renderer and iOS host.
++pub fn constrained_ios() -> bool {
++    #[cfg(target_os = "ios")]
++    {
++        static CONSTRAINED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
++        *CONSTRAINED.get_or_init(|| {
++            unsafe extern "C" {
++                fn horizon_ios_constrained_memory() -> i32;
++            }
++            // SAFETY: this host function only reads process and system properties.
++            unsafe { horizon_ios_constrained_memory() != 0 }
++        })
++    }
++    #[cfg(not(target_os = "ios"))]
++    {
++        false
++    }
++}
++
++#[cfg(target_os = "ios")]
++pub fn report_footprint(stage: &str) {
++    unsafe extern "C" {
++        fn horizon_ios_footprint(current: *mut u64, peak: *mut u64);
++    }
++    let (mut current, mut peak) = (0, 0);
++    // SAFETY: both outputs point to live writable integers.
++    unsafe {
++        horizon_ios_footprint(&mut current, &mut peak);
++    }
++    eprintln!(
++        "MOBILE_MEMORY stage={stage} phys_footprint_bytes={current} lifetime_peak_bytes={peak}"
++    );
++}
++
+ /// The memory this process holds in RAM, in bytes: not known on this system.
+ #[cfg(not(any(
+     windows,
+--- a/crates/horizon-client/src/game/resource_load.rs
++++ b/crates/horizon-client/src/game/resource_load.rs
+@@ -354,7 +354,13 @@
+     progress: &Progress,
+     publish: &mut dyn FnMut(UiResources, &std::path::Path),
+ ) -> Result<Loaded> {
+-    let threads = settings.horizon.worker_threads();
++    let constrained = horizon_threads::process_memory::constrained_ios();
++    let launch_world = launch_world.filter(|_| !constrained);
++    let threads = if constrained {
++        1
++    } else {
++        settings.horizon.worker_threads()
++    };
+     // One pool of workers for every level's streaming, the client's and the
+     // server thread's (horizon_threads::jobs), sized before any world opens.
+     horizon_threads::jobs::configure(threads);
+@@ -391,6 +397,8 @@
+             Some(ui)
+         }
+     };
++    #[cfg(target_os = "ios")]
++    horizon_threads::process_memory::report_footprint("resource_load_start");
+     let (core, loaded_gui) = loop {
+         let (ui, core) = std::thread::scope(|scope| {
+             let core = Step::spawn(scope, parallel, "core", || {
+@@ -500,7 +508,7 @@
+     // The block entity renderer's face visibility: the meshes' own, whose
+     // shapes already hold their faces, not a second load of the same tables.
+     let visibility = pack.context.tables.visibility.clone();
+-    let rest_loader = if menu {
++    let rest_loader = if menu && !constrained {
+         let resources = resources.clone();
+         let root = root.clone();
+         let vanilla_root = vanilla_root.to_owned();
+@@ -552,6 +560,10 @@
+             handle,
+         })
+     } else {
++        #[cfg(target_os = "ios")]
++        if constrained {
++            horizon_threads::process_memory::report_footprint("world_resources_start");
++        }
+         let rest = load_world_rest(
+             &root,
+             &resources,
+@@ -569,6 +581,13 @@
+             .rest
+             .set(rest)
+             .map_err(|_| "world resources already loaded")?;
++        #[cfg(target_os = "ios")]
++        if constrained {
++            progress.set(9);
++            horizon_client::telemetry::mark_rest_ready();
++            horizon_threads::release_free_memory();
++            horizon_threads::process_memory::report_footprint("world_resources_ready");
++        }
+         None
+     };
+     // The world tables load (above) while the handoff's CPU work is done: the
+@@ -604,6 +623,23 @@
+     } else {
+         (None, None)
+     };
++    #[cfg(target_os = "ios")]
++    if constrained && menu {
++        drop(entity_models);
++        horizon_threads::release_free_memory();
++        horizon_threads::process_memory::report_footprint("cpu_handoff_ready");
++        return Ok(Loaded {
++            game_cpu,
++            entity_models: None,
++            renderer_cpu,
++            root,
++            pack_error,
++            resources,
++            rest_loader,
++            pack,
++            gui: loaded_gui,
++        });
++    }
+     Ok(Loaded {
+         game_cpu,
+         entity_models,
+--- a/crates/horizon-client/src/game/loading_screen.rs
++++ b/crates/horizon-client/src/game/loading_screen.rs
+@@ -79,7 +79,8 @@
+     /// the title is on the screen holds the title back by that build. Wait for
+     /// one title frame first, unless a world is waiting to open.
+     pub(super) fn ready_for_handoff(&self) -> bool {
+-        self.title_drawn
++        horizon_threads::process_memory::constrained_ios()
++            || self.title_drawn
+             || self.menu.pending.is_some()
+             || self.ui_at.is_none_or(|at| at.elapsed() >= TITLE_FRAME_WAIT)
+     }
+@@ -208,6 +209,9 @@
+         self.title_drawn = false;
+         horizon_client::ui_theme::reset_atlas();
+         self.apply_menu_settings();
++        if horizon_threads::process_memory::constrained_ios() {
++            return; // UIKit is the loading screen until the CPU worker is done.
++        }
+         let Some(window) = self.window.clone() else {
+             return;
+         };
+@@ -292,8 +296,10 @@
+         if !self.shown && presented {
+             self.shown = true;
+             if cfg!(target_os = "ios") && option_env!("HORIZON_TESTFLIGHT").is_none() {
+-                log::info!("MOBILE first_rendered_ms={:.2}",
+-                    self.started.elapsed().as_secs_f64() * 1000.);
++                log::info!(
++                    "MOBILE first_rendered_ms={:.2}",
++                    self.started.elapsed().as_secs_f64() * 1000.
++                );
+             }
+ 
+             startup::mark("loading_screen.shown");
+@@ -344,6 +350,8 @@
+             "Horizon: world renderer ready after {} ms",
+             self.started.elapsed().as_millis()
+         );
++        #[cfg(target_os = "ios")]
++        horizon_threads::process_memory::report_footprint("renderer_ready");
+         let renderer_ms = renderer_at.elapsed().as_millis();
+         // Audio is created on the main thread, after the core is ready.
+         let audio = if !options.execution_role.is_client() {
+--- a/crates/horizon-client/src/game/resource_tables.rs
++++ b/crates/horizon-client/src/game/resource_tables.rs
+@@ -102,6 +102,18 @@
+     /// From a resource root layering packs over `defaults`, the game's own
+     /// resources (`root` itself when no pack is on).
+     pub fn load(root: &std::path::Path, defaults: &std::path::Path) -> Result<Self> {
++        if horizon_threads::process_memory::constrained_ios() {
++            let atlas = HudAtlas::build_over_with_image(
++                root,
++                defaults,
++                crate::game::mods::built_with_native_mods(),
++            )?;
++            let panorama = horizon_client::gfx::panorama::Faces::load(root, defaults);
++            return Ok(Self {
++                atlas,
++                panorama: Arc::new(panorama),
++            });
++        }
+         // The title screen waits for both: the panorama's six faces decode
+         // beside the atlas.
+         std::thread::scope(|scope| {
+--- a/crates/horizon-client-render/src/gfx/surface_setup.rs
++++ b/crates/horizon-client-render/src/gfx/surface_setup.rs
+@@ -55,6 +55,10 @@
+                 wgpu::PresentMode::Fifo
+             }
+         });
++    if horizon_threads::process_memory::constrained_ios() {
++        config.present_mode = wgpu::PresentMode::Fifo;
++        config.desired_maximum_frame_latency = 1;
++    }
+     if log_step {
+         startup_step(format_args!(
+             "device ready; configuring the surface ({}x{} {:?}, {:?})",
+--- a/crates/horizon-client-render/src/gfx.rs
++++ b/crates/horizon-client-render/src/gfx.rs
+@@ -2656,21 +2656,25 @@
+         let offscreen = surface
+             .is_none()
+             .then(|| Self::offscreen_target(&device, &config));
+-        let wide_ok = draws_wide_frame(
+-            device.features(),
+-            adapter.get_texture_format_features(WIDE_FRAME),
+-        );
+-        let float_ok = draws_frame(adapter.get_texture_format_features(LINEAR_FRAME));
++        let constrained = horizon_threads::process_memory::constrained_ios();
++        let wide_ok = !constrained
++            && draws_wide_frame(
++                device.features(),
++                adapter.get_texture_format_features(WIDE_FRAME),
++            );
++        let float_ok =
++            !constrained && draws_frame(adapter.get_texture_format_features(LINEAR_FRAME));
+         if request.linear_pack && !float_ok {
+             log::warn!(
+                 "Horizon renderer: the device can't draw a float frame; the shader API 0.2 pack runs on the 8-bit one"
+             );
+         }
+-        let coverage_ok = hud_coverage::supported(
+-            device.limits().max_color_attachments,
+-            adapter.get_downlevel_capabilities().flags,
+-            adapter.get_texture_format_features(hud_coverage::FORMAT),
+-        );
++        let coverage_ok = !constrained
++            && hud_coverage::supported(
++                device.limits().max_color_attachments,
++                adapter.get_downlevel_capabilities().flags,
++                adapter.get_texture_format_features(hud_coverage::FORMAT),
++            );
+         let hdr_driver = surface.is_some().then(|| output::window_driver(&info));
+         let output_caps = output::OutputCapabilities {
+             hdr: hdr_output,
+@@ -3479,28 +3483,70 @@
+             )
+             .into());
+         }
+-        let atlas = device.create_texture_with_data(
+-            &queue,
+-            &wgpu::TextureDescriptor {
+-                label: Some("Shared atlas"),
+-                size: wgpu::Extent3d {
+-                    width: atlas_width,
+-                    height: atlas_height,
+-                    depth_or_array_layers: 1,
+-                },
+-                mip_level_count: 1,
+-                sample_count: 1,
+-                dimension: wgpu::TextureDimension::D2,
+-                format: wgpu::TextureFormat::Rgba8Unorm,
+-                // COPY_SRC: a shader pack's weather copies the rain and snow sprites out.
+-                usage: wgpu::TextureUsages::TEXTURE_BINDING
+-                    | wgpu::TextureUsages::COPY_DST
+-                    | wgpu::TextureUsages::COPY_SRC,
+-                view_formats: &[],
++        let atlas_desc = wgpu::TextureDescriptor {
++            label: Some("Shared atlas"),
++            size: wgpu::Extent3d {
++                width: atlas_width,
++                height: atlas_height,
++                depth_or_array_layers: 1,
+             },
+-            wgpu::util::TextureDataOrder::LayerMajor,
+-            atlas_pixels,
+-        );
++            mip_level_count: 1,
++            sample_count: 1,
++            dimension: wgpu::TextureDimension::D2,
++            format: wgpu::TextureFormat::Rgba8Unorm,
++            // COPY_SRC: a shader pack's weather copies the rain and snow sprites out.
++            usage: wgpu::TextureUsages::TEXTURE_BINDING
++                | wgpu::TextureUsages::COPY_DST
++                | wgpu::TextureUsages::COPY_SRC,
++            view_formats: &[],
++        };
++        let atlas = if horizon_threads::process_memory::constrained_ios() {
++            let atlas = device.create_texture(&atlas_desc);
++            let row = (atlas_width * 4) as usize;
++            let rows = ((4 << 20) / row).max(1);
++            for (strip, pixels) in atlas_pixels.chunks(row * rows).enumerate() {
++                let submission = {
++                    queue.write_texture(
++                        wgpu::TexelCopyTextureInfo {
++                            texture: &atlas,
++                            mip_level: 0,
++                            origin: wgpu::Origin3d {
++                                x: 0,
++                                y: (strip * rows) as u32,
++                                z: 0,
++                            },
++                            aspect: wgpu::TextureAspect::All,
++                        },
++                        pixels,
++                        wgpu::TexelCopyBufferLayout {
++                            offset: 0,
++                            bytes_per_row: Some(row as u32),
++                            rows_per_image: None,
++                        },
++                        wgpu::Extent3d {
++                            width: atlas_width,
++                            height: (pixels.len() / row) as u32,
++                            depth_or_array_layers: 1,
++                        },
++                    );
++                    queue.submit([])
++                };
++                device
++                    .poll(wgpu::PollType::Wait {
++                        submission_index: Some(submission),
++                        timeout: Some(std::time::Duration::from_secs(2)),
++                    })
++                    .map_err(|e| format!("Atlas upload did not finish: {e}"))?;
++            }
++            atlas
++        } else {
++            device.create_texture_with_data(
++                &queue,
++                &atlas_desc,
++                wgpu::util::TextureDataOrder::LayerMajor,
++                atlas_pixels,
++            )
++        };
+         let atlas_view = atlas.create_view(&Default::default());
+         // vanilla's `GlintSampler`: enchanted_glint_item as its own texture,
+         // repeated per pixel (`clamp: false`), linear without mipmaps
+@@ -4796,7 +4842,12 @@
+         let depth = Self::depth(&device, &config);
+         let world_post = world_post::Post::new(&device, frame_format);
+         let uploads = upload::Uploads::new(&device);
+-        let section_uploads = upload::Uploads::with_chunk(&device, SECTION_UPLOAD_CHUNK);
++        let section_chunk = if horizon_threads::process_memory::constrained_ios() {
++            1 << 20
++        } else {
++            SECTION_UPLOAD_CHUNK
++        };
++        let section_uploads = upload::Uploads::with_chunk(&device, section_chunk);
+         let stars = stars::Stars::new(&device, (frame_format, linear_light));
+         let custom_sky = custom_sky::CustomSky::new(&device, (frame_format, linear_light));
+         let entity_outline = entity_outline::EntityOutline::new(
+@@ -5308,6 +5359,31 @@
+             .unwrap_or_else(std::sync::PoisonError::into_inner) =
+             self.surface.take().and_then(|s| Arc::try_unwrap(s).ok());
+     }
++    /// Drop transient GPU allocations after submitted work is finished.
++    #[cfg(target_os = "ios")]
++    pub fn relieve_memory_pressure(&mut self) {
++        self.land_frame();
++        if let Some(copies) = self.take_section_copies() {
++            self.queue.submit([copies]);
++        }
++        if self.wait_for_ios_gpu().is_ok() {
++            self.graveyard = Default::default();
++            self.uploads.reset(&self.device);
++            self.section_uploads.reset(&self.device);
++        }
++    }
++
++    #[cfg(target_os = "ios")]
++    fn wait_for_ios_gpu(&self) -> Result<()> {
++        self.device
++            .poll(wgpu::PollType::Wait {
++                submission_index: None,
++                timeout: Some(std::time::Duration::from_secs(2)),
++            })
++            .map_err(|e| format!("Metal queue did not drain: {e}"))?;
++        Ok(())
++    }
++
+     /// Release both active and handoff surfaces before UIKit suspends the app.
+     /// Resume with `recreate_surface` on the same live window/device.
+     pub fn suspend_surface(&mut self) {
+@@ -5402,7 +5478,8 @@
+             P::Mailbox => Some(PresentMode::Mailbox),
+             P::Immediate => Some(PresentMode::Immediate),
+         };
+-        let mode = match chosen_present_mode(&supported, vsync, setting) {
++        let constrained = horizon_threads::process_memory::constrained_ios();
++        let mode = match chosen_present_mode(&supported, vsync || constrained, setting) {
+             Some(PresentMode::Mailbox) => wgpu::PresentMode::Mailbox,
+             Some(PresentMode::Immediate) => wgpu::PresentMode::Immediate,
+             _ => wgpu::PresentMode::Fifo,
+@@ -6020,7 +6097,8 @@
+                 );
+             }
+         }
+-        if self.section_copy_bytes >= SECTION_COPY_LIMIT
++        if !horizon_threads::process_memory::constrained_ios()
++            && self.section_copy_bytes >= SECTION_COPY_LIMIT
+             && let Some(copies) = self.take_section_copies()
+         {
+             self.queue.submit([copies]);
+@@ -6936,6 +7014,7 @@
+     }
+     /// Frame generation on or off (FSR 3.1's frame interpolation).
+     pub fn set_frame_generation(&mut self, on: bool) {
++        let on = on && !horizon_threads::process_memory::constrained_ios();
+         if !on {
+             self.frame_gen.stop();
+         }
+@@ -7765,6 +7844,11 @@
+             self.queue.submit([encoder.finish()]);
+         } else if let Some(copies) = self.take_section_copies() {
+             self.queue.submit([copies]);
++        }
++        #[cfg(target_os = "ios")]
++        if !matches!(rendered, Ok(true)) && horizon_threads::process_memory::constrained_ios() {
++            // A skipped drawable can still submit atlas/geometry uploads.
++            self.wait_for_ios_gpu()?;
+         }
+         // A scaled screenshot's frame never reached the window.
+         rendered.map(|drawn| drawn && scaled.is_none())
+@@ -11778,7 +11862,8 @@
+         // Frame generation presents its own frames (`frame_gen.present` below).
+         // A `screenshot-sequence` frame is submitted here, so it can wait for it to
+         // finish.
+-        let (encoder, surface_frame, after) = if readback.is_none()
++        let (encoder, surface_frame, after) = if !horizon_threads::process_memory::constrained_ios()
++            && readback.is_none()
+             && frame.pack.frame_timing.is_none()
+             && fg_frames.is_none()
+             && hdr_readback.is_none()
+@@ -11850,6 +11935,11 @@
+             && let Some(read) = post.submitted()
+         {
+             read();
++        }
++        #[cfg(target_os = "ios")]
++        if horizon_threads::process_memory::constrained_ios() {
++            // Drain this frame before the next update can stage more geometry.
++            self.wait_for_ios_gpu()?;
+         }
+         let failed = checks.and_then(GpuChecks::pop);
+         if let Some((request, buffer)) = readback {
+--- a/crates/horizon-client-render/src/gfx/upload.rs
++++ b/crates/horizon-client-render/src/gfx/upload.rs
+@@ -24,6 +24,10 @@
+             belt: wgpu::util::StagingBelt::new(device.clone(), chunk),
+             chunk,
+         }
++    }
++    #[cfg(target_os = "ios")]
++    pub fn reset(&mut self, device: &wgpu::Device) {
++        *self = Self::with_chunk(device, self.chunk);
+     }
+     /// A mapped staging slice of at least `size` bytes. The belt gives a
+     /// write larger than its chunk a buffer of exactly that size, keeps it for
+--- a/crates/horizon-client-render/src/streaming.rs
++++ b/crates/horizon-client-render/src/streaming.rs
+@@ -1255,7 +1255,7 @@
+     /// on the allocator behind every busy worker: up to 20 ms of a frame each
+     /// time while flying at render distance 32.
+     pub fn free(&mut self, meshes: Vec<((i32, i32, i32), SectionMesh)>) {
+-        if !meshes.is_empty() {
++        if !meshes.is_empty() && !horizon_threads::process_memory::constrained_ios() {
+             self.submit(None, 0, Job::Free(meshes));
+         }
+     }
+@@ -2083,14 +2083,27 @@
+         // Meshes waiting for upload count too: when uploads fall behind (a
+         // low frame rate at a wide distance), meshing on held gigabytes of
+         // them until the system swapped.
+-        let room = (self.workers * 32).saturating_sub(self.meshing.len() + self.upload_backlog);
++        let constrained = horizon_threads::process_memory::constrained_ios();
++        let cap = if constrained { 8 } else { self.workers * 32 };
++        // Completed jobs just left `meshing` but have not entered the caller's
++        // upload backlog yet. Count them during this scheduling pass too.
++        let completed = if constrained { uploads.len() } else { 0 };
++        let mut room =
++            cap.saturating_sub(self.meshing.len() + self.upload_backlog + completed);
+         nearest_first(&mut candidates, room);
+         for (_, x, z, sections) in candidates.drain(..) {
+             let Some(region) = Self::region(world, x, z) else {
+                 continue;
+             };
+-            world.dirty_sections.take_column(x, z);
++            let mut remaining = world.dirty_sections.take_column(x, z);
+             for sy in sections.iter().map(|sy| sy as i32) {
++                if constrained && room == 0 {
++                    break;
++                }
++                room = room.saturating_sub(1);
++                if constrained {
++                    remaining.remove(sy as usize);
++                }
+                 let first = self.meshed.insert((x, z));
+                 self.sequence += 1;
+                 self.meshing.insert((x, sy, z), self.sequence);
+@@ -2118,6 +2131,9 @@
+                         },
+                     ),
+                 );
++            }
++            if constrained && !remaining.is_empty() {
++                world.dirty_sections.insert_column_mask((x, z), remaining);
+             }
+         }
+         self.cover_current = false;
+--- a/third_party/wgpu-hal/src/metal/command.rs
++++ b/third_party/wgpu-hal/src/metal/command.rs
+@@ -1,5 +1,5 @@
+ use objc2::{
+-    rc::{autoreleasepool, Retained},
++    rc::{Retained, autoreleasepool},
+     runtime::ProtocolObject,
+ };
+ use objc2_foundation::{NSRange, NSString, NSUInteger};
+@@ -14,8 +14,9 @@
+ };
+ 
+ use super::{
++    TimestampQuerySupport,
+     adapter::{self, MAX_BUFFERS},
+-    conv, TimestampQuerySupport,
++    conv,
+ };
+ use crate::CommandEncoder as _;
+ use alloc::{
+@@ -473,6 +474,12 @@
+     }
+ }
+ 
++#[cfg(target_os = "ios")]
++fn trace_encoding() -> bool {
++    static TRACE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
++    *TRACE.get_or_init(|| std::env::var("HORIZON_IOS_METAL_TRACE").as_deref() == Ok("1"))
++}
++
+ impl crate::CommandEncoder for super::CommandEncoder {
+     type A = super::Api;
+ 
+@@ -500,6 +507,13 @@
+             return Err(crate::DeviceError::Lost);
+         }
+ 
++        #[cfg(target_os = "ios")]
++        if trace_encoding() {
++            eprintln!(
++                "MOBILE_METAL stage=command_buffer label={label:?} unsubmitted={previous} metal_allocated_bytes={}",
++                self.shared.device.currentAllocatedSize(),
++            );
++        }
+         let raw = autoreleasepool(move |_| {
+             let cmd_buf_ref = if retain_references {
+                 queue.commandBuffer()
+@@ -1050,6 +1064,18 @@
+                 descriptor.setRenderTargetArrayLength(32 - mv.leading_zeros() as usize);
+             }
+             let raw = self.raw_cmd_buf.as_ref().unwrap();
++            #[cfg(target_os = "ios")]
++            if trace_encoding() {
++                eprintln!(
++                    "MOBILE_METAL stage=render_encoder label={:?} extent={:?} samples={} colors={} depth={} visibility={}",
++                    desc.label,
++                    desc.extent,
++                    desc.sample_count,
++                    desc.color_attachments.len(),
++                    desc.depth_stencil_attachment.is_some(),
++                    desc.occlusion_query_set.is_some(),
++                );
++            }
+             let encoder = raw.renderCommandEncoderWithDescriptor(&descriptor).unwrap();
+             if let Some(mv) = desc.multiview_mask {
+                 // Most likely the API just wasn't thought about enough. It's not like they ever allow you
+--- a/crates/horizon-client-render/src/gfx/arena.rs
++++ b/crates/horizon-client-render/src/gfx/arena.rs
+@@ -194,6 +194,12 @@
+         // Pages of `page_bytes`, or less where the device's buffers (or the
+         // storage bindings that read them whole) are smaller.
+         let limits = device.limits();
++        let page_bytes = if horizon_threads::process_memory::constrained_ios() {
++            // Growing a page needs both allocations alive through its copy.
++            page_bytes.min(16 << 20)
++        } else {
++            page_bytes
++        };
+         let mut bytes = limits.max_buffer_size.min(page_bytes);
+         if usage.contains(wgpu::BufferUsages::STORAGE) {
+             bytes = bytes.min(limits.max_storage_buffer_binding_size);

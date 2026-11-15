@@ -195,7 +195,7 @@ index a6a1f96226cdb38628ee5ba16cb931ae1c57b07d..83fe0585c64d63d2cfb99034d11086c0
      }
 +    /// Opt-in metadata diagnostics for a remote client, never payload contents.
 +    pub fn enable_client_diagnostics(&mut self) {
-+        if std::env::var("HORIZON_PACKET_DIAGNOSTICS").as_deref() == Ok("1") {
++        if option_env!("HORIZON_TESTFLIGHT").is_none() && std::env::var("HORIZON_PACKET_DIAGNOSTICS").as_deref() == Ok("1") {
 +            let protocol = self
 +                .reader
 +                .adapter
