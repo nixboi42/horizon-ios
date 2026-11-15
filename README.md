@@ -4,11 +4,9 @@ Horizon iOS is an unofficial native iPhone and iPad port of [Horizon](https://gi
 
 **Latest preview · 0.2.0 build 11** · [Download the unsigned IPA](https://github.com/nixboi42/horizon-ios/releases/tag/v0.2.0-beta.11) · [Release notes](RELEASE_NOTES.md)
 
-| Native launcher | Terrain preview |
-| --- | --- |
-| ![Horizon launcher with Play and Settings buttons](docs/screenshots/launcher.png) | ![A grassy Overworld hillside rendered on iPhone in terrain inspection mode](docs/screenshots/terrain-preview.png) |
+![Survival gameplay with the touch controls, health, hunger, and hotbar visible](docs/screenshots/survival-build-11.png)
 
-Screenshots are from development builds. The terrain image shows the renderer in its inspection mode.
+Survival mode in Horizon iOS 0.2.0 build 11, captured on an iPhone 17 Pro simulator.
 
 ## Install and play
 
